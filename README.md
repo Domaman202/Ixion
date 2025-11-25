@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/ixionlang/ixion/blob/main/assets/icon.png" width="700">
+  <img src="https://github.com/ixionlang/ixion/blob/main/assets/logo.png" width="500">
 
 Multi-paradigm compiled programming language for the jvm platform.
 </div>
@@ -9,7 +9,7 @@ Multi-paradigm compiled programming language for the jvm platform.
 > Before installing the language, install Microsoft JDK 21.
 
 greeting in Ixion:
-```scala
+```
 use <prelude>
 
 def main(){
@@ -27,7 +27,7 @@ def main(){
 
 pattern matching:
 
-```scala
+```
 use <prelude>
 
 type number = int | float
