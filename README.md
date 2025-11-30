@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/ixionlang/ixion/blob/main/assets/icon.png" width="700">
+  <img src="https://github.com/ixionlang/ixion/blob/main/assets/logo.png" width="700">
 
 Multi-paradigm compiled programming language for the jvm platform.
 </div>
