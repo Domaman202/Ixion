@@ -78,9 +78,12 @@ def sum(a : int, b : int): int {
 
 # Списки
 
+В Ixion не существует массивов, вместо этого используются списки - 
+динамические массивы.
+
 Список целых чисел и список строк:
 ````scala
-pub def main(){
+def main(){
     var nums = [1,2,3,4,5]
     var names = ["Maxim", "Artyom", "Anton"]
 }
@@ -88,7 +91,7 @@ pub def main(){
 
 Пустой список строк:
 ````scala
-pub def main(){
+def main(){
     var my_list = string[]
 }
 ````
@@ -97,7 +100,7 @@ pub def main(){
 ````scala
 use <prelude>
 
-pub def main(){
+def main(){
     print(ret_list())
 }
 
@@ -110,8 +113,10 @@ def ret_list() : int[] {
 ````scala
 use <prelude>
 
-pub def main(){
+def main(){
     var nums = [1,2,3]
     print(list_get(nums, 0))
 }
 ````
+
+# Типы
