@@ -40,8 +40,8 @@ public class Prelude {
 	}
 
 
-	public static <T> T list_get(CollectionUtil.IxListWrapper r, int pos) {
-		return (T) r.list().get(pos);
+	public static <T> T list_get(List<T> r, int pos) {
+		return r.get(pos);
 	}
 
 	public static int len(Object r) {
