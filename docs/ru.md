@@ -120,3 +120,44 @@ def main(){
 ````
 
 # Типы
+
+````scala
+
+use <prelude>
+
+type text = string
+
+def main(){
+    println(greeting("Artyom"))
+}
+
+def greeting(name : text) : text {
+    return "Hello, " + name
+}
+````
+
+
+# Условные конструкции
+
+## case
+
+Пример pattern matching'a с алгебраическими типами
+
+````scala
+use <prelude>
+
+type number = int | float
+
+pub def main(){
+    print_type(10)
+    print_type(10.0f)
+}
+
+def print_type(num : number){
+    case num {
+        int i => println("value " + i + " is integer")
+        float f => println("value " + f + " is float")
+    }
+}
+````
+
