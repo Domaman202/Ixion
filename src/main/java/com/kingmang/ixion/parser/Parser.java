@@ -35,9 +35,9 @@ public class Parser {
         this.tokens = tokens;
 
         // Register infix parsers for operators and accessors
-        putInfinix(ASSIGN, new AssignOperatorParser());
-        putInfinix(DOT, new PropertyAccessParser());
-        putInfinix(LBRACK, new IndexAccessParser());
+        putInfix(ASSIGN, new AssignOperatorParser());
+        putInfix(DOT, new PropertyAccessParser());
+        putInfix(LBRACK, new IndexAccessParser());
 
         // Register prefix parsers for literals and identifiers
         putPrefix(INT, new LiteralParser(false));
@@ -53,7 +53,7 @@ public class Parser {
 
         // Register grouping and function call parsers
         putPrefix(LPAREN, new GroupingParser());
-        putInfinix(LPAREN, new CallParser());
+        putInfix(LPAREN, new CallParser());
 
         // Register prefix operators
         prefix(ADD, Precedence.PREFIX);
@@ -576,7 +576,7 @@ public class Parser {
      * @param precedence The operator precedence
      */
     public void infixLeft(TokenType token, int precedence) {
-        putInfinix(token, new BinaryOperatorParser(precedence, false));
+        putInfix(token, new BinaryOperatorParser(precedence, false));
     }
 
     /**
@@ -585,7 +585,7 @@ public class Parser {
      * @param precedence The operator precedence
      */
     public void infixRight(TokenType token, int precedence) {
-        putInfinix(token, new BinaryOperatorParser(precedence, true));
+        putInfix(token, new BinaryOperatorParser(precedence, true));
     }
 
     /**
@@ -602,7 +602,7 @@ public class Parser {
      * @param precedence The operator precedence
      */
     public void postfix(TokenType token, int precedence) {
-        putInfinix(token, new PostfixOperatorParser(precedence));
+        putInfix(token, new PostfixOperatorParser(precedence));
     }
 
     /**
@@ -710,7 +710,7 @@ public class Parser {
      * @param token The token type
      * @param parselet The infix parselet
      */
-    void putInfinix(TokenType token, InfixParselet parselet) {
+    void putInfix(TokenType token, InfixParselet parselet) {
         infixParselets.put(token, parselet);
     }
 
