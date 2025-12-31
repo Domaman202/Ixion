@@ -10,6 +10,7 @@
     * [case](##case)
 * [Циклы](#Циклы)
 * [Структуры](#Структуры)
+* [Перечисления](#Перечисления)
 
 
 # Первая программа
@@ -139,6 +140,38 @@ def greeting(name : text) : text {
 
 # Условные конструкции
 
+## if else
+
+Пример 1:
+````scala
+use <prelude>
+
+def main(){
+    var flag = true
+    if(flag) {
+        print("yes :)")
+    } else {
+        print("no :(")
+    }
+}
+````
+
+Пример 2:
+````scala
+use <prelude>
+
+def main(){
+    var age = 18
+    if(age >= 18) {
+        print("hello!")
+    } else if(age >= 16){
+        print("go home")
+    } else {
+        print("go home kid")
+    }
+} 
+````
+
 ## case
 
 Пример pattern matching'a с алгебраическими типами
@@ -161,3 +194,4 @@ def print_type(num : number){
 }
 ````
 
+# Циклы
