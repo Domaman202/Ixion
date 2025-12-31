@@ -486,6 +486,12 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
         return Optional.empty();
     }
 
+    @NotNull
+    @Override
+    public Optional<IxType> visitEnumAccess(EnumAccessExpression expr) {
+        return Optional.empty();
+    }
+
     /**
      * Visits a return statement and processes the return expression
      * @param statement The return statement

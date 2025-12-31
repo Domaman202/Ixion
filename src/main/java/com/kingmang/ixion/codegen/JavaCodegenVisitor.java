@@ -294,6 +294,14 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     }
 
     @Override
+    public Optional<String> visitEnumAccess(EnumAccessExpression expression) {
+        String enumName = ((IdentifierExpression)expression.enumType).identifier.source();
+        String enumValue = expression.enumValue.identifier.source();
+        print(enumName + "." + enumValue);
+        return Optional.empty();
+    }
+
+    @Override
     public Optional<String> visitTypeAlias(TypeAliasStatement statement) {
         return Optional.empty();
     }

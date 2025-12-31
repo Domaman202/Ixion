@@ -610,6 +610,12 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         return Optional.empty();
     }
 
+    @NotNull
+    @Override
+    public Optional<IxType> visitEnumAccess(EnumAccessExpression expr) {
+        return Optional.empty();
+    }
+
     /**
      * @param statement Return statement to type check
      * @return Empty optional as return statements don't produce values
