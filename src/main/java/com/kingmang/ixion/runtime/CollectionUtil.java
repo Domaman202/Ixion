@@ -1,6 +1,7 @@
 package com.kingmang.ixion.runtime;
 
 import com.kingmang.ixion.exception.Panic;
+import org.javatuples.Pair;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -101,4 +102,19 @@ public class CollectionUtil {
         return Arrays.asList(i);
     }
 
+    public static Class<?> convert(Class<?> c) {
+        if (c == Integer.class) return int.class;
+        if (c == Float.class) return float.class;
+        if (c == Boolean.class) return boolean.class;
+
+        return null;
+    }
+
+    public static String getMethodDescriptor(List<Pair<String, IxType>> parameters, IxType returnType) {
+        String parametersDescriptor = parameters.stream()
+                .map(parameter -> parameter.getValue1().getDescriptor())
+                .collect(Collectors.joining("", "(", ")"));
+        String returnDescriptor = returnType.getDescriptor();
+        return parametersDescriptor + returnDescriptor;
+    }
 }

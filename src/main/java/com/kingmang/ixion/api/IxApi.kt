@@ -3,6 +3,7 @@ package com.kingmang.ixion.api
 import com.kingmang.ixion.api.Debugger.debug
 import com.kingmang.ixion.ast.ExportStatement
 import com.kingmang.ixion.ast.UseStatement
+import com.kingmang.ixion.codegen.BytecodeGenerator
 import com.kingmang.ixion.codegen.JavaCodegenVisitor
 import com.kingmang.ixion.env.EnvironmentVisitor
 import com.kingmang.ixion.exception.IxException
@@ -14,9 +15,15 @@ import com.kingmang.ixion.runtime.IxType
 import com.kingmang.ixion.typechecker.TypeCheckVisitor
 import org.apache.commons.io.FilenameUtils
 import org.javatuples.Pair
-import java.io.*
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.FileWriter
+import java.io.IOException
+import java.io.OutputStream
 import java.nio.file.Path
 import java.util.*
+
 
 @JvmRecord
 data class IxApi(
@@ -89,7 +96,7 @@ data class IxApi(
 
             IxException.killIfErrors(this, "Correct type errors before compilation can continue.")
         }
-        //output(compilationSet)
+        output(compilationSet)
 
         val base = entry.fullRelativePath
 
@@ -101,7 +108,7 @@ data class IxApi(
      * @param compilationSet The set of files to output
      * @throws IxException.CompilerError If output errors occur
      */
-    /*
+
     @Throws(CompilerError::class)
     fun output(compilationSet: MutableMap<String?, out IxFile>) {
         val bytecodeGenerator = BytecodeGenerator()
@@ -146,7 +153,7 @@ data class IxApi(
         }
     }
 
-     */
+
 
     /**
      * Compiles Ixion code to Java source code
@@ -391,6 +398,9 @@ data class IxApi(
         return source
     }
 
+
+
+
     companion object {
         /**
          * Extracts class name from IxFile
@@ -422,4 +432,6 @@ data class IxApi(
             System.exit(code)
         }
     }
+
+
 }

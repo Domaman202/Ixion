@@ -1,9 +1,11 @@
 package com.kingmang.ixion.runtime
 
+import com.kingmang.ixion.lexer.TokenType
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.commons.GeneratorAdapter
 import java.io.Serializable
+
 
 enum class BuiltInType(
     name: String,
@@ -282,6 +284,16 @@ enum class BuiltInType(
     companion object {
         val widenings: MutableMap<BuiltInType?, Int?> = HashMap<BuiltInType?, Int?>()
 
+        fun getFromToken(tokenType: TokenType): BuiltInType? {
+            return when (tokenType) {
+                TokenType.TRUE, TokenType.FALSE -> BuiltInType.BOOLEAN
+                TokenType.STRING -> BuiltInType.STRING
+                TokenType.INT -> BuiltInType.INT
+                TokenType.FLOAT -> BuiltInType.FLOAT
+                TokenType.DOUBLE -> BuiltInType.DOUBLE
+                else -> throw IllegalStateException("Unexpected value: " + tokenType)
+            }
+        }
         init {
             widenings.put(BuiltInType.BOOLEAN, -1)
             widenings.put(BuiltInType.CHAR, 0)
