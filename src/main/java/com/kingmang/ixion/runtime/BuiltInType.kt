@@ -1,5 +1,6 @@
 package com.kingmang.ixion.runtime
 
+import com.kingmang.ixion.api.IxApi
 import com.kingmang.ixion.lexer.TokenType
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
@@ -172,8 +173,7 @@ enum class BuiltInType(
 
             BuiltInType.STRING -> mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String")
             else -> {
-                System.err.println("Unboxing isn't supported for that type.")
-                System.exit(29)
+                IxApi.exit("Unboxing isn't supported for that type.", 29)
             }
         }
     }

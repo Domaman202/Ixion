@@ -264,8 +264,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
                     parameters.add(Pair.with(param.name.source(), t));
                 }
             } else {
-                System.err.println("pt not present");
-                System.exit(783);
+                IxApi.exit("pt not present", 783);
             }
         }
 
@@ -408,8 +407,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
                 IxType t = pt.get();
                 statement.types.put(keyType, t);
             } else {
-                System.err.println("pt not present");
-                System.exit(783);
+                IxApi.exit("pt not present", 783);
             }
             var childEnvironment = block.context;
             childEnvironment.parent = currentContext;
@@ -526,8 +524,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
                 fieldTypes[i] = fieldT.get();
                 parameters.add(new Pair<>(fieldNames[i], fieldTypes[i]));
             } else {
-                System.err.println("fieldT not present");
-                System.exit(429);
+                IxApi.exit("fieldT not present", 429);
             }
         }
         String name = statement.name.source();

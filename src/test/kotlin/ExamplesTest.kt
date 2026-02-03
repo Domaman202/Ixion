@@ -51,16 +51,16 @@ class ExamplesTest {
         )
     }
 
-//    @Test // its breaks test lol
-//    fun simple_list() {
-//        ixAssert(
-//            "simple_list.ix", """
-//                [1, 2, 3]
-//                [20]
-//
-//                """.trimIndent()
-//        )
-//    }
+    @Test
+    fun simple_list() {
+        ixAssert(
+            "simple_list.ix", """
+                [1, 2, 3]
+                [20]
+
+                """.trimIndent()
+        )
+    }
 
     @Test
     fun struct() {
