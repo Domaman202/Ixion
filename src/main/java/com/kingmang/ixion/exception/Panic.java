@@ -1,5 +1,7 @@
 package com.kingmang.ixion.exception;
 
+import com.kingmang.ixion.api.IxApi;
+
 public class Panic {
 
     private final String R = "\u001B[31m";
@@ -11,7 +13,6 @@ public class Panic {
     }
 
     public void send(){
-        System.out.println(R + ("panic: " + message) + RESET);
-        System.exit(1);
+        IxApi.exit(R + ("panic: " + message) + RESET, 1);
     }
 }

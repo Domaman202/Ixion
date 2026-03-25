@@ -12,6 +12,7 @@ import com.kingmang.ixion.exception.ModuleNotFoundException
 import com.kingmang.ixion.modules.Modules
 import com.kingmang.ixion.runtime.DefType
 import com.kingmang.ixion.runtime.IxType
+import com.kingmang.ixion.runtime.IxionExitException
 import com.kingmang.ixion.typechecker.TypeCheckVisitor
 import org.apache.commons.io.FilenameUtils
 import org.javatuples.Pair
@@ -34,8 +35,7 @@ data class IxApi(
     /**
      * Default constructor for IxApi
      */
-    constructor() : this(ArrayList<IxException.Data?>(),
-        HashMap<String?, IxFile?>() as MutableMap<String?, IxFile>?, true)
+    constructor() : this(ArrayList<IxException.Data?>(), HashMap(), true)
 
     /**
      * Compiles Ixion code to JVM bytecode
@@ -127,9 +127,8 @@ data class IxApi(
                 output = FileOutputStream(fileName)
                 output.write(byteUnit)
                 output.close()
-            } catch (e: IOException) {
-                System.err.println("The above call to mkdirs() should have worked.")
-                System.exit(9)
+            } catch (_: IOException) {
+                exit("The above call to mkdirs() should have worked.", 9)
             }
 
             for (p in allByteUnits.getValue1()!!.entries) {
@@ -146,8 +145,7 @@ data class IxApi(
                     output.write(innerCw.toByteArray())
                     output.close()
                 } catch (e: IOException) {
-                    System.err.println("The above call to mkdirs() should have worked.")
-                    System.exit(9)
+                    exit("The above call to mkdirs() should have worked.", 9)
                 }
             }
         }
@@ -265,8 +263,7 @@ data class IxApi(
                     writer.write(fullJavaFile.toString())
                 }
             } catch (e: IOException) {
-                System.err.println("Error writing Java file: " + e.message)
-                System.exit(9)
+                exit("Error writing Java file: " + e.message, 9)
             }
 
             generateStructJavaFiles(source, javaGenerator.getStructClasses())
@@ -310,8 +307,7 @@ data class IxApi(
                     writer.write(fullStructFile.toString())
                 }
             } catch (e: IOException) {
-                System.err.println("Error writing struct Java file: " + e.message)
-                System.exit(9)
+                exit("Error writing struct Java file: " + e.message, 9)
             }
         }
     }
@@ -427,11 +423,18 @@ data class IxApi(
          * @param code The exit code
          */
         @JvmStatic
-        fun exit(message: String?, code: Int) {
-            System.err.println(message)
-            System.exit(code)
+        fun exit(message: String?, code: Int): Nothing {
+            throw IxionExitException(message, code)
+        }
+
+        /**
+         * Exits the application with a throwable cause and code
+         * @param cause The cause
+         * @param code The exit code
+         */
+        @JvmStatic
+        fun exit(cause: Throwable?, code: Int): Nothing {
+            throw IxionExitException(cause, code)
         }
     }
-
-
 }

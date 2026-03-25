@@ -359,8 +359,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
 
         } else {
-            System.err.println("Bad!");
-            System.exit(43);
+            IxApi.exit("Bad!", 43);
         }
 
         return Optional.empty();

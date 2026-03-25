@@ -1,6 +1,7 @@
 package com.kingmang.ixion.parser;
 
 import com.kingmang.ixion.api.Context;
+import com.kingmang.ixion.api.IxApi;
 import com.kingmang.ixion.api.PublicAccess;
 import com.kingmang.ixion.ast.*;
 import com.kingmang.ixion.lexer.LexerImpl;
@@ -272,8 +273,7 @@ public class Parser {
         if (stmt instanceof PublicAccess) {
             return new ExportStatement(pos, stmt);
         } else {
-            System.err.println("Can only export struct, type alias, variable, enum or function.");
-            System.exit(65);
+            IxApi.exit("Can only export struct, type alias, variable, enum or function.", 65);
             return null;
         }
     }
@@ -631,8 +631,7 @@ public class Parser {
      * @param message Error message
      */
     private static void error(int line, String where, String message) {
-        System.err.println("[line " + line + "] Parser error" + where + ": " + message);
-        System.exit(1);
+        IxApi.exit("[line " + line + "] Parser error" + where + ": " + message, 1);
     }
 
     /**

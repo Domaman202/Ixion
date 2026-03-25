@@ -4,6 +4,7 @@ import com.kingmang.ixion.api.Debugger;
 import com.kingmang.ixion.api.IxApi;
 import com.kingmang.ixion.api.IxionConstant;
 import com.kingmang.ixion.exception.IxException;
+import com.kingmang.ixion.runtime.IxionExitException;
 
 import java.io.*;
 import java.nio.file.Path;
@@ -18,9 +19,14 @@ public class Ixion {
     private CompilationTarget target = CompilationTarget.JVM_BYTECODE;
 
     public static void main(String[] args) {
-        Ixion cli = new Ixion();
-        cli.parseArguments(args);
-        cli.run();
+        try {
+            Ixion cli = new Ixion();
+            cli.parseArguments(args);
+            cli.run();
+        } catch (IxionExitException exit) {
+            System.err.println(exit.getMessage());
+            System.exit(exit.getCode());
+        }
     }
 
     private void parseArguments(String[] args) {
@@ -150,9 +156,8 @@ public class Ixion {
         }
 
         if (entry == null) {
-            System.err.println("Error: Entry file is required");
             printHelp();
-            System.exit(1);
+            IxApi.exit("Error: Entry file is required", 1);
             return;
         }
 
@@ -186,13 +191,11 @@ public class Ixion {
             }
 
         } catch (FileNotFoundException e) {
-            System.err.println("File not found: " + e.getMessage());
-            System.exit(2);
+            IxApi.exit("File not found: " + e.getMessage(), 2);
         } catch (IxException.CompilerError e) {
             IxApi.exit(e.getMessage(), 1);
         } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            System.exit(3);
+            IxApi.exit(e, 3);
         }
     }
 
