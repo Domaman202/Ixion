@@ -19,7 +19,7 @@ class Context {
         mutability[name] = Mutability.IMMUTABLE
     }
 
-    fun addVariableOrError(ixApi: IxApi?, name: String?, type: IxType?, file: File?, node: Node) {
+    fun addVariableOrError(ixApi: IxApi?, name: String?, type: IxType?, file: File, node: Node) {
         if (getVariable(name) != null) {
             RedeclarationException().send(ixApi, file, node, name)
         } else {

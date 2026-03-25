@@ -18,14 +18,14 @@ abstract class IxException protected constructor(
     private val templateString: String,
     private val suggestion: String?
 ) {
-    fun send(ixApi: IxApi?, file: File?, node: Node, vararg varargs: String?) { // todo: not null file
+    fun send(ixApi: IxApi?, file: File, node: Node, vararg varargs: String?) {
         try {
             val pos = node.position!!
             var line = pos.line - 2
             if (line < 0) line = 0
             val limit = 3
 
-            val lines = Files.lines(file!!.toPath())
+            val lines = Files.lines(file.toPath())
             val selection = lines.skip(line.toLong()).limit(limit.toLong()).toList()
 
             val startLine = line
