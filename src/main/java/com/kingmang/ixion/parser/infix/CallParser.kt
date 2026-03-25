@@ -10,7 +10,7 @@ import com.kingmang.ixion.parser.Precedence
 class CallParser : InfixParselet {
     override fun parse(parser: Parser, left: Expression, token: Token): Expression {
         val pos = parser.pos
-        val args = ArrayList<Expression?>()
+        val args = ArrayList<Expression>()
 
         if (!parser.match(TokenType.RPAREN)) {
             do {

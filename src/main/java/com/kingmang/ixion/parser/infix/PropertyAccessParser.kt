@@ -22,7 +22,7 @@ class PropertyAccessParser : InfixParselet {
             )
         }
 
-        val identifiers = ArrayList<IdentifierExpression?>()
+        val identifiers = ArrayList<IdentifierExpression>()
         var i = parser.consume()
         identifiers.add(IdentifierExpression(parser.pos, i))
 

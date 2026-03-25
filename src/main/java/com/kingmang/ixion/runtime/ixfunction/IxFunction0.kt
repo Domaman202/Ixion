@@ -1,6 +1,5 @@
-package com.kingmang.ixion.runtime.ixfunction;
+package com.kingmang.ixion.runtime.ixfunction
 
-@FunctionalInterface
-public interface IxFunction0<R> {
-    R apply();
+fun interface IxFunction0<R> {
+    fun apply(): R?
 }

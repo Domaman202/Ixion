@@ -11,7 +11,7 @@ data class LiteralParser(val isList: Boolean) : PrefixParselet {
     override fun parse(parser: Parser, token: Token): Expression {
         val pos = parser.pos
         if (token.type == TokenType.LBRACK) {
-            val args = ArrayList<Expression?>()
+            val args = ArrayList<Expression>()
             if (!parser.match(TokenType.RBRACK)) {
                 do {
                     args.add(parser.expression())

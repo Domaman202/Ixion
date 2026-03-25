@@ -4,22 +4,19 @@ import com.kingmang.ixion.api.IxApi
 import com.kingmang.ixion.api.IxFile
 import com.kingmang.ixion.api.IxionConstant.Clinit
 import com.kingmang.ixion.api.IxionConstant.Init
-import com.kingmang.ixion.runtime.IxType
 import com.kingmang.ixion.runtime.StructType
 import org.apache.commons.io.FilenameUtils
-import org.javatuples.Pair
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.commons.GeneratorAdapter
 import org.objectweb.asm.commons.Method
-import java.util.*
 import java.util.stream.Collectors
 
 class BytecodeGenerator {
-    fun generate(compiler: IxApi?, source: IxFile): Pair<ClassWriter, MutableMap<StructType, ClassWriter>?> {
-        val cw = ClassWriter(CodegenVisitor.flags)
+    fun generate(compiler: IxApi?, source: IxFile): Pair<ClassWriter, MutableMap<StructType, ClassWriter>> {
+        val cw = ClassWriter(CodegenVisitor.FLAGS)
 
         val qualifiedName = FilenameUtils.removeExtension(source.fullRelativePath)
         cw.visit(
@@ -59,7 +56,7 @@ class BytecodeGenerator {
 
         val codegenVisitor = CodegenVisitor(compiler, source.rootContext, source, cw)
 
-        source.acceptVisitor<Optional<ClassWriter?>?>(codegenVisitor)
+        source.acceptVisitor(codegenVisitor)
 
         cw.visitEnd()
 

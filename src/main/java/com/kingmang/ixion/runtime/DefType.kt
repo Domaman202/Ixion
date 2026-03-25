@@ -16,16 +16,16 @@ class DefType : StructType {
     var isPrefixed: Boolean = false
     var owner: String? = null
 
-    var specializations: MutableList<MutableMap<String?, IxType?>?> = ArrayList()
+    var specializations: MutableList<MutableMap<String, IxType>> = ArrayList()
 
-    var currentSpecialization: MutableMap<String?, IxType?>? = null
+    var currentSpecialization: MutableMap<String, IxType>? = null
     @JvmField
     var external: IxFile? = null
 
     constructor(name: String, parameters: MutableList<Pair<String, IxType>>) : super(
         name,
         parameters,
-        ArrayList<String?>()
+        ArrayList<String>()
     ) {
         this.name = name
     }
@@ -33,7 +33,7 @@ class DefType : StructType {
     constructor(
         name: String,
         parameters: MutableList<Pair<String, IxType>>,
-        generics: MutableList<String?>
+        generics: MutableList<String>
     ) : super(name, parameters, generics) {
         this.name = name
     }
@@ -51,9 +51,9 @@ class DefType : StructType {
         return p
     }
 
-    fun buildSpecialization(arguments: MutableList<Expression?>): MutableMap<String?, IxType?> {
+    fun buildSpecialization(arguments: MutableList<Expression>): MutableMap<String, IxType> {
         val argTypes = arguments.map { ex: Expression? -> ex!!.realType }
-        val specialization = HashMap<String?, IxType?>()
+        val specialization = HashMap<String, IxType>()
         for (i in parameters.indices) {
             val p = parameters[i]
             val pt = p.second
@@ -94,7 +94,7 @@ class DefType : StructType {
     }
 
     companion object {
-        fun getSpecializedType(specialization: MutableMap<String?, IxType?>, key: String?): IxType? {
+        fun getSpecializedType(specialization: MutableMap<String, IxType>, key: String?): IxType? {
             return specialization[key]
         }
     }

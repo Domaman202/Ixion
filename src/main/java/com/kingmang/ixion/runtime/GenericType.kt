@@ -1,13 +1,13 @@
 package com.kingmang.ixion.runtime
 
-data class GenericType(val key: String?) : IxType {
+data class GenericType(val key: String) : IxType {
     override val defaultValue: Any?
         get() = null
 
     override val descriptor: String
         get() = "Ljava/lang/Object;"
 
-    override val internalName: String?
+    override val internalName: String
         get() = key
 
     override val loadVariableOpcode: Int

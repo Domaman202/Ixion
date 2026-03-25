@@ -14,7 +14,7 @@ class IndexAccessParser : InfixParselet {
         val right = parser.expression(precedence)
         parser.consume(TokenType.RBRACK, "Expected ']' after index access.")
 
-        val arguments = ArrayList<Expression?>()
+        val arguments = ArrayList<Expression>()
         if (left is IdentifierExpression) {
             arguments.add(left)
             arguments.add(right)

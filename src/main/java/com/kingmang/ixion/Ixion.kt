@@ -1,250 +1,250 @@
-package com.kingmang.ixion;
+package com.kingmang.ixion
 
-import com.kingmang.ixion.api.Debugger;
-import com.kingmang.ixion.api.IxApi;
-import com.kingmang.ixion.api.IxionConstant;
-import com.kingmang.ixion.exception.IxException;
-import com.kingmang.ixion.runtime.IxionExitException;
+import com.kingmang.ixion.api.Debugger.debug
+import com.kingmang.ixion.api.IxApi
+import com.kingmang.ixion.api.IxApi.Companion.exit
+import com.kingmang.ixion.api.IxionConstant
+import com.kingmang.ixion.exception.IxException.CompilerError
+import com.kingmang.ixion.runtime.IxionExitException
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.net.URL
+import java.net.URLClassLoader
+import java.nio.file.Path
+import kotlin.system.exitProcess
 
-import java.io.*;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+class Ixion {
+    private var entry: String? = null
+    private var helpRequested = false
+    private var compileOnly = false
+    private var target = CompilationTarget.JVM_BYTECODE
 
-public class Ixion {
-
-    private String entry;
-    private boolean helpRequested = false;
-    private boolean compileOnly = false;
-    private CompilationTarget target = CompilationTarget.JVM_BYTECODE;
-
-    public static void main(String[] args) {
-        try {
-            Ixion cli = new Ixion();
-            cli.parseArguments(args);
-            cli.run();
-        } catch (IxionExitException exit) {
-            System.err.println(exit.getMessage());
-            System.exit(exit.getCode());
-        }
-    }
-
-    private void parseArguments(String[] args) {
-        for (String arg : args) {
-            switch (arg) {
-                case "-h":
-                case "--help":
-                    helpRequested = true;
-                    break;
-                case "--java":
-                    target = CompilationTarget.JAVA_SOURCE;
-                    break;
-                case "--compile-only":
-                    compileOnly = true;
-                    break;
-                default:
-                    if (entry == null && !arg.startsWith("-")) {
-                        entry = arg;
-                    }
-                    break;
+    private fun parseArguments(args: Array<String>) {
+        for (arg in args) {
+            when (arg) {
+                "-h", "--help" -> helpRequested = true
+                "--java" -> target = CompilationTarget.JAVA_SOURCE
+                "--compile-only" -> compileOnly = true
+                else -> if (entry == null && !arg.startsWith("-")) {
+                    entry = arg
+                }
             }
         }
     }
 
-    private void printHelp() {
-        System.out.println("Usage: ixion [OPTIONS] <entry-file>");
-        System.out.println("Compile and run an ixion program.\n");
-        System.out.println("Options:");
-        System.out.println("  -h, --help        Display this help message");
-        System.out.println("  --java            Generate Java source code instead of bytecode");
-        System.out.println("  --compile-only    Only compile, do not run\n");
+    private fun printHelp() {
+        println("Usage: ixion [OPTIONS] <entry-file>")
+        println("Compile and run an ixion program.\n")
+        println("Options:")
+        println("  -h, --help        Display this help message")
+        println("  --java            Generate Java source code instead of bytecode")
+        println("  --compile-only    Only compile, do not run\n")
     }
 
-    public void executeBytecode(String className) throws IOException, InterruptedException {
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "java",
-                "--enable-preview",
-                "-cp",
-                IxionConstant.OUT_DIR + System.getProperty("path.separator") + "target/classes",
-                className
-        );
-        processBuilder.inheritIO();
-        Process process = processBuilder.start();
+    @Throws(IOException::class, InterruptedException::class)
+    fun executeBytecode(className: String?) {
+        val processBuilder = ProcessBuilder(
+            "java",
+            "--enable-preview",
+            "-cp",
+            "${IxionConstant.OUT_DIR}${File.pathSeparator}target/classes",
+            className
+        )
+        processBuilder.inheritIO()
+        val process = processBuilder.start()
 
-        int status = process.waitFor();
-        if (status != 0) System.err.println("Process finished with exit code " + status);
+        val status = process.waitFor()
+        if (status != 0) System.err.println("Process finished with exit code $status")
     }
 
-    public void compileJavaToBytecode(String projectRoot, String basePath) throws IOException, InterruptedException {
-        String javaFile = Path.of(projectRoot, IxionConstant.OUT_DIR, basePath + ".java").toString();
-        String classpath = IxionConstant.OUT_DIR + System.getProperty("path.separator") + "target/classes";
+    @Throws(IOException::class, InterruptedException::class)
+    fun compileJavaToBytecode(projectRoot: String, basePath: String?) {
+        val javaFile = Path.of(projectRoot, IxionConstant.OUT_DIR, "$basePath.java").toString()
+        val classpath = IxionConstant.OUT_DIR + File.pathSeparator + "target/classes"
 
-        List<String> command = new ArrayList<>();
-        command.add("javac");
-        command.add("-d");
-        command.add(IxionConstant.OUT_DIR);
-        command.add("-cp");
-        command.add(classpath);
-        command.add(javaFile);
+        val command: MutableList<String?> = ArrayList()
+        command.add("javac")
+        command.add("-d")
+        command.add(IxionConstant.OUT_DIR)
+        command.add("-cp")
+        command.add(classpath)
+        command.add(javaFile)
 
-        ProcessBuilder processBuilder = new ProcessBuilder(command);
-        processBuilder.inheritIO();
-        Process process = processBuilder.start();
+        val processBuilder = ProcessBuilder(command)
+        processBuilder.inheritIO()
+        val process = processBuilder.start()
 
-        int status = process.waitFor();
+        val status = process.waitFor()
         if (status != 0) {
-            throw new IOException("Java compilation failed with exit code " + status);
+            throw IOException("Java compilation failed with exit code $status")
         }
     }
 
-    public void executeJava(String className) throws IOException, InterruptedException {
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "java",
-                "-cp",
-                IxionConstant.OUT_DIR + File.pathSeparator + "target/classes",
-                className
-        );
-        processBuilder.inheritIO();
-        Process process = processBuilder.start();
+    @Throws(IOException::class, InterruptedException::class)
+    fun executeJava(className: String?) {
+        val processBuilder = ProcessBuilder(
+            "java",
+            "-cp",
+            IxionConstant.OUT_DIR + File.pathSeparator + "target/classes",
+            className
+        )
+        processBuilder.inheritIO()
+        val process = processBuilder.start()
 
-        int status = process.waitFor();
-        if (status != 0) System.err.println("Process finished with exit code " + status);
+        val status = process.waitFor()
+        if (status != 0) System.err.println("Process finished with exit code $status")
     }
 
-    public void compileAndRunJava(String projectRoot, String basePath, String className)
-            throws IOException, InterruptedException {
-        Debugger.debug("Compiling Java source code...");
-        compileJavaToBytecode(projectRoot, basePath);
+    @Throws(IOException::class, InterruptedException::class)
+    fun compileAndRunJava(projectRoot: String, basePath: String?, className: String?) {
+        debug("Compiling Java source code...")
+        compileJavaToBytecode(projectRoot, basePath)
 
         if (!compileOnly) {
-            Debugger.debug("Running Java program...");
-            executeJava(className);
+            debug("Running Java program...")
+            executeJava(className)
         }
     }
 
-    public void compileAllJavaFiles(String directory) throws IOException, InterruptedException {
-        File dir = new File(directory);
-        File[] javaFiles = dir.listFiles((d, name) -> name.endsWith(".java"));
+    @Throws(IOException::class, InterruptedException::class)
+    fun compileAllJavaFiles(directory: String) {
+        val dir = File(directory)
+        val javaFiles = dir.listFiles { _: File?, name: String? -> name!!.endsWith(".java") }
 
         if (javaFiles != null) {
-            List<String> command = new ArrayList<>();
-            command.add("javac");
-            command.add("-d");
-            command.add(IxionConstant.OUT_DIR);
-            command.add("-cp");
-            command.add(IxionConstant.OUT_DIR + System.getProperty("path.separator") + "target/classes");
+            val command: MutableList<String?> = ArrayList()
+            command.add("javac")
+            command.add("-d")
+            command.add(IxionConstant.OUT_DIR)
+            command.add("-cp")
+            command.add("${IxionConstant.OUT_DIR}${File.pathSeparator}target/classes")
 
-            for (File javaFile : javaFiles) {
-                command.add(javaFile.getAbsolutePath());
+            for (javaFile in javaFiles) {
+                command.add(javaFile.absolutePath)
             }
 
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            processBuilder.inheritIO();
-            Process process = processBuilder.start();
+            val processBuilder = ProcessBuilder(command)
+            processBuilder.inheritIO()
+            val process = processBuilder.start()
 
-            int status = process.waitFor();
+            val status = process.waitFor()
             if (status != 0) {
-                throw new IOException("Java compilation failed with exit code " + status);
+                throw IOException("Java compilation failed with exit code $status")
             }
         }
     }
 
-    public void run() {
+    fun run() {
         if (helpRequested) {
-            printHelp();
-            return;
+            printHelp()
+            return
         }
 
         if (entry == null) {
-            printHelp();
-            IxApi.exit("Error: Entry file is required", 1);
-            return;
+            printHelp()
+            exit("Error: Entry file is required", 1)
         }
 
-        var api = new IxApi();
-        String pwd = System.getProperty("user.dir");
-        String moduleLocation = Path.of(pwd).toString();
+        val api = IxApi()
+        val pwd = System.getProperty("user.dir")
+        val moduleLocation = Path.of(pwd).toString()
 
         try {
-            String stdDir = Path.of(moduleLocation, "std").toString();
-            compileAllJavaFiles(stdDir);
+            val stdDir = Path.of(moduleLocation, "std").toString()
+            compileAllJavaFiles(stdDir)
 
-            String classPath = null;
-            String basePath = null;
+            var classPath: String?
+            var basePath: String?
 
             if (target == CompilationTarget.JAVA_SOURCE) {
-                classPath = api.compileToJava(moduleLocation, entry);
-                basePath = classPath.replace(".", "/");
+                classPath = api.compileToJava(moduleLocation, entry)
+                basePath = classPath.replace(".", "/")
 
                 if (!compileOnly) {
-                    compileAndRunJava(moduleLocation, basePath, classPath);
+                    compileAndRunJava(moduleLocation, basePath, classPath)
                 } else {
-                    Debugger.debug("Java source generated: " +
-                            Path.of(moduleLocation, IxionConstant.OUT_DIR, basePath + ".java"));
+                    debug(
+                        "Java source generated: ${Path.of(moduleLocation, IxionConstant.OUT_DIR, "$basePath.java")}"
+                    )
                 }
             } else {
-                classPath = api.compile(moduleLocation, entry);
+                classPath = api.compile(moduleLocation, entry)
 
                 if (!compileOnly) {
-                    executeBytecode(classPath);
+                    executeBytecode(classPath)
                 }
             }
-
-        } catch (FileNotFoundException e) {
-            IxApi.exit("File not found: " + e.getMessage(), 2);
-        } catch (IxException.CompilerError e) {
-            IxApi.exit(e.getMessage(), 1);
-        } catch (IOException | InterruptedException e) {
-            IxApi.exit(e, 3);
+        } catch (e: FileNotFoundException) {
+            exit("File not found: ${e.message}", 2)
+        } catch (e: CompilerError) {
+            exit(e.message, 1)
+        } catch (e: IOException) {
+            exit(e, 3)
+        } catch (e: InterruptedException) {
+            exit(e, 3)
         }
     }
 
-    public enum CompilationTarget {
+    enum class CompilationTarget {
         JVM_BYTECODE,
         JAVA_SOURCE
     }
 
     // for unit tests:
+    @Throws(IOException::class, InterruptedException::class)
+    fun getCompiledProgramOutput(entryFileName: String?): String {
+        val output = StringBuilder()
 
-    public String getCompiledProgramOutput(String entryFileName) throws IOException, InterruptedException {
-        StringBuilder output = new StringBuilder();
-
-        if (entryFileName == null || entryFileName.isEmpty()) {
-            return "Error: Entry file name is required";
+        if (entryFileName.isNullOrEmpty()) {
+            return "Error: Entry file name is required"
         }
 
-        var api = new IxApi();
-        String moduleLocation = System.getProperty("user.dir");
+        val api = IxApi()
+        val moduleLocation = System.getProperty("user.dir")
 
         try {
-            String classPath = api.compile(moduleLocation, entryFileName);
-            output.append(executeBytecodeAndGetOutput(classPath));
-
-        } catch (Exception e) {
-            output.append("Error: ").append(e.getMessage());
+            val classPath = api.compile(moduleLocation, entryFileName)
+            output.append(executeBytecodeAndGetOutput(classPath))
+        } catch (e: Exception) {
+            output.append("Error: ").append(e.message)
         }
 
-        return output.toString();
+        return output.toString()
     }
 
-    private String executeBytecodeAndGetOutput(String className) throws Exception {
+    @Throws(Exception::class)
+    private fun executeBytecodeAndGetOutput(className: String?): String? {
 //        var classpath = new URL[]{new File(IxionConstant.OUT_DIR + File.pathSeparator + "target/classes").toURI().toURL()};
-        var classpath = new URL[]{new File(IxionConstant.OUT_DIR).toURI().toURL()};
-        try (var loader = new URLClassLoader(classpath)) {
-            var output = "";
-            var capture = new CombinedOutputCapture();
+        val classpath: Array<URL?> = arrayOf(File(IxionConstant.OUT_DIR).toURI().toURL())
+        URLClassLoader(classpath).use { loader ->
+            var output: String? = ""
+            val capture = CombinedOutputCapture()
             try {
-                loader.loadClass(className).getMethod("main", String[].class).invoke(null, (Object) new String[0]);
-            } catch (Exception e) {
-                System.err.println("Error:");
-                e.printStackTrace(System.err);
+                loader.loadClass(className).getMethod("main", Array<String>::class.java)
+                    .invoke(null, arrayOfNulls<String>(0) as Any)
+            } catch (e: Exception) {
+                System.err.println("Error:")
+                e.printStackTrace(System.err)
             } finally {
-                output = capture.getOutput();
-                capture.close();
+                output = capture.output
+                capture.close()
             }
-            return output;
+            return output
+        }
+    }
+
+    companion object {
+        @JvmStatic
+        fun main(args: Array<String>) {
+            try {
+                val cli = Ixion()
+                cli.parseArguments(args)
+                cli.run()
+            } catch (exit: IxionExitException) {
+                System.err.println(exit.message)
+                exitProcess(exit.code)
+            }
         }
     }
 }

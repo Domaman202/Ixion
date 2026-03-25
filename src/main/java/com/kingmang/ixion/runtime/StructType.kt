@@ -7,7 +7,7 @@ import java.util.stream.Collectors
 open class StructType(
     override var name: String,
     open val parameters: MutableList<Pair<String, IxType>>,
-    open val generics: MutableList<String?>
+    open val generics: MutableList<String>
 ) : IxType, Serializable {
     open var qualifiedName: String? = null
     open var parentName: String? = null

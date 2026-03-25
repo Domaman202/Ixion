@@ -1,816 +1,817 @@
-package com.kingmang.ixion.codegen;
+package com.kingmang.ixion.codegen
 
-import com.kingmang.ixion.Visitor;
-import com.kingmang.ixion.api.Context;
-import com.kingmang.ixion.api.IxApi;
-import com.kingmang.ixion.api.IxFile;
-import com.kingmang.ixion.api.IxionConstant;
-import com.kingmang.ixion.ast.*;
-import com.kingmang.ixion.exception.IdentifierNotFoundException;
-import com.kingmang.ixion.exception.ImplementationException;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.runtime.*;
-import com.kingmang.ixion.typechecker.TypeResolver;
-import kotlin.Pair;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang3.NotImplementedException;
-import org.jetbrains.annotations.NotNull;
-import org.objectweb.asm.*;
-import org.objectweb.asm.commons.GeneratorAdapter;
-import org.objectweb.asm.commons.Method;
+import com.kingmang.ixion.Visitor
+import com.kingmang.ixion.api.Context
+import com.kingmang.ixion.api.IxApi
+import com.kingmang.ixion.api.IxApi.Companion.exit
+import com.kingmang.ixion.api.IxFile
+import com.kingmang.ixion.api.IxionConstant.ArrayListType
+import com.kingmang.ixion.api.IxionConstant.Init
+import com.kingmang.ixion.api.IxionConstant.IteratorType
+import com.kingmang.ixion.api.IxionConstant.ListWrapperType
+import com.kingmang.ixion.api.IxionConstant.ObjectType
+import com.kingmang.ixion.api.IxionConstant.PublicStatic
+import com.kingmang.ixion.ast.*
+import com.kingmang.ixion.exception.IdentifierNotFoundException
+import com.kingmang.ixion.exception.ImplementationException
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.runtime.*
+import com.kingmang.ixion.runtime.BuiltInType.Companion.getFromToken
+import com.kingmang.ixion.runtime.BuiltInType.Companion.widenings
+import com.kingmang.ixion.runtime.DefType.Companion.getSpecializedType
+import com.kingmang.ixion.typechecker.TypeResolver
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.lang3.NotImplementedException
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Label
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.Type
+import org.objectweb.asm.commons.GeneratorAdapter
+import org.objectweb.asm.commons.Method
+import java.io.File
+import java.util.*
+import java.util.function.BiConsumer
+import java.util.stream.Collectors
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Stack;
-import java.util.stream.Collectors;
+class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxFile, cw: ClassWriter) : Visitor<Optional<ClassWriter>> {
+    val file: File
+    val cw: ClassWriter
+    val structWriters: MutableMap<StructType, ClassWriter> = HashMap()
+    private val functionStack = Stack<DefType>()
 
-public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
-    public final static int flags = ClassWriter.COMPUTE_FRAMES + ClassWriter.COMPUTE_MAXS;
-    public final static int CLASS_VERSION = 61;
-    public final Context rootContext;
-    public final IxFile source;
-    public final File file;
-    public final IxApi api;
-    public final ClassWriter cw;
-    public final Map<StructType, ClassWriter> structWriters = new HashMap<>();
-    private final Stack<DefType> functionStack = new Stack<>();
+    var currentContext: Context?
 
-    public Context currentContext;
-
-    public CodegenVisitor(IxApi api, Context rootEnvironment, IxFile source, ClassWriter cw) {
-        this.api = api;
-        this.rootContext = rootEnvironment;
-        this.source = source;
-        this.currentContext = this.rootContext;
-        this.cw = cw;
-        this.file = source.file;
+    init {
+        this.currentContext = this.rootContext
+        this.cw = cw
+        this.file = source.file
     }
 
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visit(Statement stmt) {
-        return stmt.accept(this);
+    override fun visit(statement: Statement): Optional<ClassWriter> {
+        return statement.accept(this)
     }
 
     /**
      * Обрабатывает объявление псевдонима типа.
      * Поскольку псевдонимы не требуют генерации байт-кода, метод возвращает пустой Optional.
-     * @param stmt Выражение псевдонима типа
+     * @param statement Выражение псевдонима типа
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitTypeAlias(TypeAliasStatement stmt) {
-        return Optional.empty();
+    override fun visitTypeAlias(statement: TypeAliasStatement): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для операции присваивания значения переменной или полю объекта.
      * Для идентификаторов сохраняет значение в локальную переменную, для доступа к полям объекта - использует putField.
-     * @param expr Выражение присваивания
+     * @param expression Выражение присваивания
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitAssignExpr(AssignExpression expr) {
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
+    override fun visitAssignExpr(expression: AssignExpression): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
 
-        if (expr.left instanceof IdentifierExpression id) {
-            expr.right.accept(this);
-            var index = funcType.getLocalMap().get(id.identifier.getSource());
-            ga.storeLocal(index);
-        } else if (expr.left instanceof PropertyAccessExpression pa) {
-            var lType = expr.left.getRealType();
-            var rType = expr.right.getRealType();
-
-            var root = pa.expression;
-            root.accept(this);
-
-            var typeChain = pa.typeChain;
-            var identifiers = pa.identifiers;
-            for (int i = 0; i < typeChain.size() - 2; i++) {
-                var current = typeChain.get(i);
-                var next = typeChain.get(i + 1);
-                var fieldName = identifiers.get(i).identifier.getSource();
-                ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
+        when (expression.left) {
+            is IdentifierExpression -> {
+                expression.right.accept(this)
+                val index = funcType.localMap[expression.left.identifier.source]
+                ga!!.storeLocal(index!!)
             }
 
-            expr.right.accept(this);
+            is PropertyAccessExpression -> {
+                val lType = expression.left.realType
+                val rType = expression.right.realType
 
-            if (rType instanceof BuiltInType btArg) {
-                if (lType instanceof UnionType) {
-                    btArg.doBoxing(ga);
+                val root: Expression = expression.left.expression
+                root.accept(this)
+
+                val typeChain: MutableList<IxType?> = expression.left.typeChain
+                val identifiers: MutableList<IdentifierExpression> = expression.left.identifiers
+                for (i in 0..<typeChain.size - 2) {
+                    val current = typeChain[i]
+                    val next = typeChain[i + 1]
+                    val fieldName = identifiers[i].identifier.source
+                    ga!!.getField(Type.getType(current!!.descriptor), fieldName, Type.getType(next!!.descriptor))
                 }
+
+                expression.right.accept(this)
+
+                if (rType is BuiltInType) {
+                    if (lType is UnionType) {
+                        rType.doBoxing(ga!!)
+                    }
+                }
+
+                ga!!.putField(
+                    Type.getType(typeChain[typeChain.size - 2]!!.descriptor),
+                    identifiers[identifiers.size - 1].identifier.source,
+                    Type.getType(typeChain[typeChain.size - 1]!!.descriptor)
+                )
             }
 
-            ga.putField(Type.getType(typeChain.get(typeChain.size() - 2).getDescriptor()),
-                    identifiers.get(identifiers.size() - 1).identifier.getSource(),
-                    Type.getType(typeChain.get(typeChain.size() - 1).getDescriptor()));
-
-        } else {
-            new ImplementationException().send(api, file, expr, "Assignment not implemented for any recipient but identifier yet");
+            else -> {
+                ImplementationException().send(
+                    api,
+                    file,
+                    expression,
+                    "Assignment not implemented for any recipient but identifier yet"
+                )
+            }
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает некорректное выражение. Возвращает пустой результат, так как такое выражение не должно встречаться на этапе генерации кода.
-     * @param expr Некорректное выражение
+     * @param expression Некорректное выражение
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitBad(BadExpression expr) {
-        return Optional.empty();
+    override fun visitBad(expression: BadExpression): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для бинарных операций, включая арифметические, сравнения, логические операции и конкатенацию строк.
      * Для строк используется StringBuilder, для логических операций - short-circuit evaluation.
-     * @param expr Бинарное выражение
+     * @param expression Бинарное выражение
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitBinaryExpr(BinaryExpression expr) {
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
-        var left = expr.left;
-        var right = expr.right;
-        if (expr.getRealType().equals(BuiltInType.STRING)) {
-            ga.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
-            ga.visitInsn(Opcodes.DUP);
-            ga.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", IxionConstant.getInit(), "()V", false);
+    override fun visitBinaryExpr(expression: BinaryExpression): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
+        val left = expression.left
+        val right = expression.right
+        if (expression.realType == BuiltInType.STRING) {
+            ga!!.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder")
+            ga.visitInsn(Opcodes.DUP)
+            ga.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", Init, "()V", false)
 
-            expr.left.accept(this);
+            expression.left.accept(this)
 
-            String leftExprDescriptor = expr.left.getRealType().getDescriptor();
-            String descriptor = "(" + leftExprDescriptor + ")Ljava/lang/StringBuilder;";
-            ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", descriptor, false);
+            val leftExprDescriptor = expression.left.realType.descriptor
+            var descriptor = "($leftExprDescriptor)Ljava/lang/StringBuilder;"
+            ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", descriptor, false)
 
-            expr.right.accept(this);
+            expression.right.accept(this)
 
-            String rightExprDescriptor = expr.right.getRealType().getDescriptor();
-            descriptor = "(" + rightExprDescriptor + ")Ljava/lang/StringBuilder;";
-            ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", descriptor, false);
-            ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+            val rightExprDescriptor: String = expression.right.realType.descriptor!!
+            descriptor = "($rightExprDescriptor)Ljava/lang/StringBuilder;"
+            ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", descriptor, false)
+            ga.visitMethodInsn(
+                Opcodes.INVOKEVIRTUAL,
+                "java/lang/StringBuilder",
+                "toString",
+                "()Ljava/lang/String;",
+                false
+            )
         } else {
-            switch (expr.operator.getType()) {
-                case AND -> {
-                    Label falseLabel = new Label();
-                    Label successLabel = new Label();
+            when (expression.operator.type) {
+                TokenType.AND -> {
+                    val falseLabel = Label()
+                    val successLabel = Label()
 
-                    left.accept(this);
-                    ga.ifZCmp(GeneratorAdapter.EQ, falseLabel);
+                    left.accept(this)
+                    ga!!.ifZCmp(GeneratorAdapter.EQ, falseLabel)
 
-                    right.accept(this);
-                    ga.ifZCmp(GeneratorAdapter.EQ, falseLabel);
-                    ga.push(true);
-                    ga.goTo(successLabel);
+                    right.accept(this)
+                    ga.ifZCmp(GeneratorAdapter.EQ, falseLabel)
+                    ga.push(true)
+                    ga.goTo(successLabel)
 
-                    ga.mark(falseLabel);
-                    ga.push(false);
+                    ga.mark(falseLabel)
+                    ga.push(false)
 
-                    ga.mark(successLabel);
+                    ga.mark(successLabel)
                 }
-                case OR -> {
-                    Label falseLabel = new Label();
-                    Label successLabel = new Label();
-                    Label endLabel = new Label();
 
-                    left.accept(this);
-                    ga.ifZCmp(GeneratorAdapter.NE, successLabel);
+                TokenType.OR -> {
+                    val falseLabel = Label()
+                    val successLabel = Label()
+                    val endLabel = Label()
 
-                    right.accept(this);
-                    ga.ifZCmp(GeneratorAdapter.NE, successLabel);
-                    ga.goTo(falseLabel);
+                    left.accept(this)
+                    ga!!.ifZCmp(GeneratorAdapter.NE, successLabel)
 
-                    ga.mark(successLabel);
-                    ga.push(true);
-                    ga.goTo(endLabel);
+                    right.accept(this)
+                    ga.ifZCmp(GeneratorAdapter.NE, successLabel)
+                    ga.goTo(falseLabel)
 
-                    ga.mark(falseLabel);
-                    ga.push(false);
+                    ga.mark(successLabel)
+                    ga.push(true)
+                    ga.goTo(endLabel)
 
-                    ga.mark(endLabel);
+                    ga.mark(falseLabel)
+                    ga.push(false)
+
+                    ga.mark(endLabel)
                 }
-                case XOR -> {
-                    left.accept(this);
-                    right.accept(this);
-                    ga.visitInsn(Opcodes.IXOR);
+
+                TokenType.XOR -> {
+                    left.accept(this)
+                    right.accept(this)
+                    ga!!.visitInsn(Opcodes.IXOR)
                 }
-                case EQUAL, NOTEQUAL, LT, GT, LE, GE -> {
-                    var cmpType = castAndAccept(ga, left, right, this);
 
-                    Label endLabel = new Label();
-                    Label falseLabel = new Label();
+                TokenType.EQUAL, TokenType.NOTEQUAL, TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE -> {
+                    val cmpType: Type? = castAndAccept(ga!!, left, right, this)
 
-                    int opcode = switch (expr.operator.getType()) {
-                        case EQUAL -> GeneratorAdapter.NE;
-                        case NOTEQUAL -> GeneratorAdapter.EQ;
-                        case LT -> GeneratorAdapter.GT;
-                        case GT -> GeneratorAdapter.LT;
-                        case LE -> GeneratorAdapter.GE;
-                        case GE -> GeneratorAdapter.LE;
-                        default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
-                    };
-                    ga.ifCmp(cmpType, opcode, falseLabel);
-                    ga.push(true);
-                    ga.goTo(endLabel);
+                    val endLabel = Label()
+                    val falseLabel = Label()
 
-                    ga.mark(falseLabel);
-                    ga.push(false);
-                    ga.mark(endLabel);
+                    val opcode = when (expression.operator.type) {
+                        TokenType.EQUAL -> GeneratorAdapter.NE
+                        TokenType.NOTEQUAL -> GeneratorAdapter.EQ
+                        TokenType.LT -> GeneratorAdapter.GT
+                        TokenType.GT -> GeneratorAdapter.LT
+                        TokenType.LE -> GeneratorAdapter.GE
+                        TokenType.GE -> GeneratorAdapter.LE
+                        else -> throw IllegalStateException("Unexpected value: " + expression.operator.type)
+                    }
+                    ga.ifCmp(cmpType, opcode, falseLabel)
+                    ga.push(true)
+                    ga.goTo(endLabel)
+
+                    ga.mark(falseLabel)
+                    ga.push(false)
+                    ga.mark(endLabel)
                 }
-                case MOD -> {
-                    var cmpType = castAndAccept(ga, left, right, this);
 
-                    if (cmpType == Type.DOUBLE_TYPE) {
-                        ga.visitInsn(Opcodes.DREM);
-                    } else if (cmpType == Type.INT_TYPE) {
-                        ga.visitInsn(Opcodes.IREM);
-                    } else if (cmpType == Type.FLOAT_TYPE) {
-                        ga.visitInsn(Opcodes.FREM);
+                TokenType.MOD -> {
+                    val cmpType: Type? = castAndAccept(ga!!, left, right, this)
+
+                    if (cmpType === Type.DOUBLE_TYPE) {
+                        ga.visitInsn(Opcodes.DREM)
+                    } else if (cmpType === Type.INT_TYPE) {
+                        ga.visitInsn(Opcodes.IREM)
+                    } else if (cmpType === Type.FLOAT_TYPE) {
+                        ga.visitInsn(Opcodes.FREM)
                     }
                 }
-                case POW -> {
-                }
-                case ADD, SUB, MUL, DIV -> arithmetic(ga, left, right, expr.operator, expr.getRealType(), this);
-                case null, default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
-            }
 
+                TokenType.POW -> {
+                }
+
+                TokenType.ADD, TokenType.SUB, TokenType.MUL, TokenType.DIV -> arithmetic(
+                    ga!!,
+                    left,
+                    right,
+                    expression.operator,
+                    expression.realType,
+                    this
+                )
+
+                else -> {}
+            }
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает блок операторов, посещая каждый оператор в блоке последовательно.
-     * @param block Блок операторов
+     * @param statement Блок операторов
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitBlockStmt(BlockStatement block) {
-        for (var stmt : block.statements) stmt.accept(this);
-        return Optional.empty();
+    override fun visitBlockStmt(statement: BlockStatement): Optional<ClassWriter> {
+        for (stmt in statement.statements) stmt!!.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для вызова функции или создания экземпляра структуры.
      * Обрабатывает как встроенные (glue) функции, так и пользовательские, включая специализацию дженериков.
-     * @param expr Выражение вызова
+     * @param expression Выражение вызова
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitCall(CallExpression expr) {
+    override fun visitCall(expression: CallExpression): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
 
-        var funcType = functionStack.peek();
-
-        if (expr.item instanceof IdentifierExpression identifier) {
-            expr.item.setRealType(currentContext.getVariable(identifier.identifier.getSource()));
+        if (expression.item is IdentifierExpression) {
+            expression.item.realType = currentContext!!.getVariable(expression.item.identifier.source)!!
         }
 
-        if (expr.item.getRealType() instanceof DefType callType) {
-            if (callType.getGlue()) {
-                String owner = callType.getOwner();
-                String name = callType.getName();
-                if (callType.isPrefixed()) name = "_" + name;
+        if (expression.item.realType is DefType) {
+            val callType = expression.item.realType as DefType
+            if (callType.glue) {
+                val owner: String? = callType.owner
+                var name: String = callType.name
+                if (callType.isPrefixed) name = "_$name"
 
-                var params = callType.getParameters().stream().map(arg -> new Pair<>(arg.getSecond().getName(), arg.getSecond())).collect(Collectors.toList());
+                val params =
+                    callType.parameters
+                        .stream()
+                        .map { Pair(it!!.second.name!!, it.second) }
+                        .toList()
 
-                IxType returnType = callType.getReturnType();
-                String methodDescriptor = CollectionUtil.getMethodDescriptor(params, returnType);
+                val returnType: IxType = callType.returnType
+                val methodDescriptor = CollectionUtil.getMethodDescriptor(params, returnType)
 
-                CollectionUtil.zip(params, expr.arguments, (param, arg) -> {
-                    arg.accept(this);
-                    if (arg.getRealType() != null && arg.getRealType() instanceof BuiltInType btArg) {
-                        if (param.getSecond() instanceof ExternalType et && et.getFoundClass().equals(Object.class)) {
-                            btArg.doBoxing(funcType.getGa());
-                        }
-                    }
-                });
-
-                funcType.getGa().visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false);
-            } else {
-                var ga = funcType.getGa();
-                CollectionUtil.zip(callType.getParameters(), expr.arguments, (param, arg) -> {
-                    arg.accept(this);
-                    if (arg.getRealType() != null && arg.getRealType() instanceof BuiltInType btArg) {
-                        switch (param.getSecond()) {
-                            case ExternalType et when et.getFoundClass().equals(Object.class) -> btArg.doBoxing(ga);
-                            case UnionType ut -> btArg.doBoxing(funcType.getGa());
-                            default -> {
+                CollectionUtil.zip(
+                    params,
+                    expression.arguments,
+                    BiConsumer { param: Pair<String?, IxType>?, arg: Expression? ->
+                        arg!!.accept(this)
+                        if (arg.realType is BuiltInType) {
+                            if (param!!.second is ExternalType && (param.second as ExternalType).foundClass == Any::class.java) {
+                                (arg.realType as BuiltInType).doBoxing(funcType.ga!!)
                             }
                         }
-                    }
-                });
+                    })
 
-                var specialization = callType.buildSpecialization(expr.arguments);
-                var returnType = callType.getReturnType();
-                if (returnType instanceof GenericType gt) {
-                    returnType = DefType.Companion.getSpecializedType(specialization, gt.getKey());
+                funcType.ga!!.visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false)
+            } else {
+                val ga = funcType.ga!!
+                CollectionUtil.zip(
+                    callType.parameters,
+                    expression.arguments,
+                    BiConsumer { param: Pair<String, IxType>, arg: Expression? ->
+                        arg!!.accept(this)
+                        if (arg.realType is BuiltInType) {
+                            when (param.second) {
+                                is ExternalType -> if ((param.second as ExternalType).foundClass == Any::class.java) (arg.realType as BuiltInType).doBoxing(ga)
+                                is UnionType-> (arg.realType as BuiltInType).doBoxing(ga)
+                            }
+                        }
+                    })
 
+                val specialization: MutableMap<String, IxType> = callType.buildSpecialization(expression.arguments)
+                var returnType: IxType? = callType.returnType
+                if (returnType is GenericType) {
+                    returnType = getSpecializedType(specialization, returnType.key)
                 }
 
-                var parameters = callType.buildParametersFromSpecialization(specialization);
+                val parameters: MutableList<Pair<String, IxType>> =
+                    callType.buildParametersFromSpecialization(specialization)
 
-                String descriptor = CollectionUtil.getMethodDescriptor(parameters, returnType);
-
-                String methodDescriptor = CollectionUtil.getMethodDescriptor(callType.getParameters(), callType.getReturnType());
-                methodDescriptor = descriptor;
-                String name = "_" + callType.getName();
-                String owner = FilenameUtils.removeExtension(source.getFullRelativePath());
+                val descriptor = CollectionUtil.getMethodDescriptor(parameters, returnType!!)
+                val methodDescriptor: String = descriptor
+                val name = "_" + callType.name
+                var owner = FilenameUtils.removeExtension(source.fullRelativePath)
 
                 if (callType.external != null) {
-                    owner = callType.external.getFullRelativePath();
+                    owner = callType.external!!.fullRelativePath
                 }
 
-                funcType.getGa().visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false);
+                funcType.ga!!.visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false)
             }
+        } else if (expression.item.realType is StructType) {
+            val st = expression.item.realType as StructType
+            val ga = funcType.ga
 
-        } else if (expr.item.getRealType() instanceof StructType st) {
-            var ga = funcType.getGa();
+            ga!!.newInstance(Type.getType("L" + st.qualifiedName + ";"))
+            ga.visitInsn(Opcodes.DUP)
 
-            ga.newInstance(Type.getType("L" + st.getQualifiedName() + ";"));
-            ga.visitInsn(Opcodes.DUP);
-
-            StringBuilder typeDescriptor = new StringBuilder();
-            CollectionUtil.zip(st.getParameters(), expr.arguments, (param, arg) -> {
-                arg.accept(this);
-                var paramType = param.getSecond();
-                if (paramType instanceof UnionType || paramType instanceof GenericType) {
-                    typeDescriptor.append(paramType.getDescriptor());
-                    if (arg.getRealType() instanceof BuiltInType btArg) {
-                        btArg.doBoxing(ga);
+            val typeDescriptor = StringBuilder()
+            CollectionUtil.zip(
+                st.parameters,
+                expression.arguments,
+                BiConsumer { param: Pair<String, IxType>, arg: Expression? ->
+                    arg!!.accept(this)
+                    val paramType = param.second
+                    if (paramType is UnionType || paramType is GenericType) {
+                        typeDescriptor.append(paramType.descriptor)
+                        if (arg.realType is BuiltInType) {
+                            (arg.realType as BuiltInType).doBoxing(ga)
+                        }
+                    } else {
+                        typeDescriptor.append(arg.realType.descriptor)
                     }
+                })
 
-                } else {
-                    typeDescriptor.append(arg.getRealType().getDescriptor());
-                }
-
-            });
-
-            ga.invokeConstructor(Type.getType("L" + st.getQualifiedName() + ";"), new Method(IxionConstant.getInit(), "(" + typeDescriptor + ")V"));
-
-
+            ga.invokeConstructor(
+                Type.getType("L${st.qualifiedName};"),
+                Method(Init, "($typeDescriptor)V")
+            )
         } else {
-            IxApi.exit("Bad!", 43);
+            exit("Bad!", 43)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает пустое выражение. Не генерирует байт-код.
-     * @param empty Пустое выражение
+     * @param expression Пустое выражение
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitEmpty(EmptyExpression empty) {
-        return Optional.empty();
+    override fun visitEmpty(expression: EmptyExpression): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для создания пустого списка, используя конструктор ArrayList.
-     * @param emptyList Выражение пустого списка
+     * @param expression Выражение пустого списка
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitEmptyList(EmptyListExpression emptyList) {
-        var ga = functionStack.peek().getGa();
+    override fun visitEmptyList(expression: EmptyListExpression): Optional<ClassWriter> {
+        val ga = functionStack.peek().ga
 
-        ga.newInstance(IxionConstant.getArrayListType());
-        ga.dup();
+        ga!!.newInstance(ArrayListType)
+        ga.dup()
 
-        ga.invokeConstructor(IxionConstant.getArrayListType(), new Method(IxionConstant.getInit(), "()V"));
-        return Optional.empty();
+        ga.invokeConstructor(ArrayListType, Method(Init, "()V"))
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает объявление перечисления. В данный момент не реализовано.
-     * @param stmt Оператор перечисления
+     * @param statement Оператор перечисления
      * @return Выбрасывает NotImplementedException
      */
-    @Override
-    public Optional<ClassWriter> visitEnum(EnumStatement stmt) {
-        throw new NotImplementedException("method not implemented");
+    override fun visitEnum(statement: EnumStatement): Optional<ClassWriter> {
+        throw NotImplementedException("method not implemented")
     }
 
     /**
      * Обрабатывает экспорт оператора, посещая внутренний оператор.
-     * @param stmt Оператор экспорта
+     * @param statement Оператор экспорта
      * @return Результат посещения внутреннего оператора
      */
-    @Override
-    public Optional<ClassWriter> visitExport(ExportStatement stmt) {
-        return stmt.stmt.accept(this);
+    override fun visitExport(statement: ExportStatement): Optional<ClassWriter> {
+        return statement.stmt.accept(this)
     }
 
     /**
      * Генерирует байт-код для выражения, используемого как оператор.
-     * @param stmt Оператор выражения
+     * @param statement Оператор выражения
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitExpressionStmt(ExpressionStatement stmt) {
-        stmt.expression.accept(this);
-        return Optional.empty();
+    override fun visitExpressionStmt(statement: ExpressionStatement): Optional<ClassWriter> {
+        statement.expression.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для цикла for. Поддерживает итерацию по идентификатору или вызову, возвращающему итератор.
-     * @param stmt Оператор цикла for
+     * @param statement Оператор цикла for
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitFor(ForStatement stmt) {
-        var funcType = functionStack.peek();
-        var ga = functionStack.peek().getGa();
-        currentContext = stmt.block.context;
-        var startLabel = new Label();
-        var endLabel = new Label();
+    override fun visitFor(statement: ForStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = functionStack.peek().ga
+        currentContext = statement.block.context
+        val startLabel = Label()
+        val endLabel = Label()
 
-        if (stmt.expression instanceof IdentifierExpression id) {
-            ga.mark(startLabel);
-            stmt.expression.accept(this);
-
+        if (statement.expression is IdentifierExpression) {
+            ga!!.mark(startLabel)
+            statement.expression.accept(this)
         } else {
-            stmt.expression.accept(this);
-            stmt.setLocalExprIndex(ga.newLocal(IxionConstant.getIteratorType()));
-            funcType.getLocalMap().put("______", stmt.getLocalExprIndex());
-            ga.storeLocal(stmt.getLocalExprIndex(), IxionConstant.getIteratorType());
-            ga.mark(startLabel);
-            ga.loadLocal(stmt.getLocalExprIndex());
+            statement.expression.accept(this)
+            statement.localExprIndex = ga!!.newLocal(IteratorType)
+            funcType.localMap["______"] = statement.localExprIndex
+            ga.storeLocal(statement.localExprIndex, IteratorType)
+            ga.mark(startLabel)
+            ga.loadLocal(statement.localExprIndex)
         }
 
-        ga.invokeInterface(IxionConstant.getIteratorType(), new Method("hasNext", "()Z"));
-        ga.visitJumpInsn(Opcodes.IFEQ, endLabel);
+        ga.invokeInterface(IteratorType, Method("hasNext", "()Z"))
+        ga.visitJumpInsn(Opcodes.IFEQ, endLabel)
 
-        if (stmt.expression instanceof IdentifierExpression id) {
-            stmt.expression.accept(this);
+        if (statement.expression is IdentifierExpression) {
+            statement.expression.accept(this)
         } else {
-            ga.loadLocal(stmt.getLocalExprIndex());
+            ga.loadLocal(statement.localExprIndex)
         }
-        ga.invokeInterface(IxionConstant.getIteratorType(), new Method("next", "()Ljava/lang/Object;"));
-        BuiltInType.INT.doUnboxing(ga);
-        stmt.setLocalExprIndex(ga.newLocal(Type.getType(BuiltInType.INT.getDescriptor())));
-        funcType.getLocalMap().put(stmt.name.getSource(), stmt.getLocalExprIndex());
-        funcType.getGa().storeLocal(stmt.getLocalExprIndex(), Type.getType(BuiltInType.INT.getDescriptor()));
+        ga.invokeInterface(IteratorType, Method("next", "()Ljava/lang/Object;"))
+        BuiltInType.INT.doUnboxing(ga)
+        statement.localExprIndex = ga.newLocal(Type.getType(BuiltInType.INT.descriptor))
+        funcType.localMap[statement.name.source] = statement.localExprIndex
+        funcType.ga!!.storeLocal(statement.localExprIndex, Type.getType(BuiltInType.INT.descriptor))
 
-        stmt.block.accept(this);
+        statement.block.accept(this)
 
-        ga.goTo(startLabel);
-        ga.mark(endLabel);
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        ga.goTo(startLabel)
+        ga.mark(endLabel)
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для объявления функции, включая специализации для дженериков.
      * Создает метод в текущем ClassWriter с соответствующим дескриптором и генерирует тело функции.
-     * @param stmt Оператор объявления функции
+     * @param statement Оператор объявления функции
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitFunctionStmt(DefStatement stmt) {
-        var funcType = currentContext.getVariableTyped(stmt.name.getSource(), DefType.class);
-        functionStack.add(funcType);
-        var childEnvironment = stmt.body.context;
-        String name = "_" + funcType.getName();
-        var access = Opcodes.ACC_PUBLIC + Opcodes.ACC_STATIC;
+    override fun visitFunctionStmt(statement: DefStatement): Optional<ClassWriter> {
+        val funcType = currentContext!!.getVariableTyped<DefType?>(statement.name.source, DefType::class.java as Class<DefType?>)
+        functionStack.add(funcType)
+        val childEnvironment = statement.body!!.context
+        var name = "_" + funcType!!.name
+        val access = Opcodes.ACC_PUBLIC + Opcodes.ACC_STATIC
 
         if (funcType.hasGenerics()) {
-
-            for (Map<String, IxType> specialization : funcType.getSpecializations()) {
-                funcType.setCurrentSpecialization(specialization);
-                var returnType = funcType.getReturnType();
-                if (returnType instanceof GenericType gt) {
-                    returnType = DefType.Companion.getSpecializedType(specialization, gt.getKey());
+            for (specialization in funcType.specializations) {
+                funcType.currentSpecialization = specialization
+                var returnType: IxType? = funcType.returnType
+                if (returnType is GenericType) {
+                    returnType = getSpecializedType(specialization, returnType.key)
                 }
 
-                var parameters = funcType.buildParametersFromSpecialization(specialization);
+                val parameters = funcType.buildParametersFromSpecialization(specialization)
 
-                String descriptor = CollectionUtil.getMethodDescriptor(parameters, returnType);
+                val descriptor = CollectionUtil.getMethodDescriptor(parameters, returnType!!)
 
-                var mv = cw.visitMethod(access, name, descriptor, null, null);
-                funcType.setGa(new GeneratorAdapter(mv, access, name, descriptor));
-                for (int i = 0; i < funcType.getParameters().size(); i++) {
-                    var param = funcType.getParameters().get(i);
-                    funcType.getArgMap().put(param.getFirst(), i);
+                val mv = cw.visitMethod(access, name, descriptor, null, null)
+                funcType.ga = GeneratorAdapter(mv, access, name, descriptor)
+                for (i in funcType.parameters.indices) {
+                    val param: Pair<String?, IxType?> = funcType.parameters[i]
+                    funcType.argMap[param.first] = i
                 }
 
-                currentContext = childEnvironment;
-                stmt.body.accept(this);
-                funcType.getGa().endMethod();
-                currentContext = currentContext.parent;
+                currentContext = childEnvironment
+                statement.body.accept(this)
+                funcType.ga!!.endMethod()
+                currentContext = currentContext!!.parent
             }
-            functionStack.pop();
+            functionStack.pop()
         } else {
-
-            String descriptor = CollectionUtil.getMethodDescriptor(funcType.getParameters(), funcType.getReturnType());
-            if (funcType.getName().equals("main")) {
-                name = "main";
-                descriptor = "([Ljava/lang/String;)V";
+            var descriptor = CollectionUtil.getMethodDescriptor(funcType.parameters, funcType.returnType)
+            if (funcType.name == "main") {
+                name = "main"
+                descriptor = "([Ljava/lang/String;)V"
             }
-            var mv = cw.visitMethod(access, name, descriptor, null, null);
-            funcType.setGa(new GeneratorAdapter(mv, access, name, descriptor));
-            for (int i = 0; i < funcType.getParameters().size(); i++) {
-                var param = funcType.getParameters().get(i);
-                funcType.getArgMap().put(param.getFirst(), i);
+            val mv = cw.visitMethod(access, name, descriptor, null, null)
+            funcType.ga = GeneratorAdapter(mv, access, name, descriptor)
+            for (i in funcType.parameters.indices) {
+                val param: Pair<String?, IxType?> = funcType.parameters[i]
+                funcType.argMap[param.first] = i
             }
 
-            currentContext = childEnvironment;
-            stmt.body.accept(this);
-            funcType.getGa().endMethod();
-            currentContext = currentContext.parent;
-            functionStack.pop();
-
+            currentContext = childEnvironment
+            statement.body.accept(this)
+            funcType.ga!!.endMethod()
+            currentContext = currentContext!!.parent
+            functionStack.pop()
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает группирующее выражение, посещая внутреннее выражение.
-     * @param expr Группирующее выражение
+     * @param expression Группирующее выражение
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitGroupingExpr(GroupingExpression expr) {
-        expr.expression.accept(this);
-        return Optional.empty();
+    override fun visitGroupingExpr(expression: GroupingExpression): Optional<ClassWriter> {
+        expression.expression.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для загрузки значения идентификатора из локальной переменной или аргумента метода.
-     * @param expr Выражение идентификатора
+     * @param expression Выражение идентификатора
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitIdentifierExpr(IdentifierExpression expr) {
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
-        var type = currentContext.getVariable(expr.identifier.getSource());
+    override fun visitIdentifierExpr(expression: IdentifierExpression): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
+        var type = currentContext!!.getVariable(expression.identifier.source)
 
-        if (type instanceof GenericType gt) {
-            type = funcType.getCurrentSpecialization().get(gt.getKey());
+        if (type is GenericType) {
+            type = funcType.currentSpecialization!![type.key]
         }
 
-        expr.setRealType(type);
+        expression.realType = type!!
 
-        int index;
-        String source = expr.identifier.getSource();
-        if (funcType.getLocalMap().containsKey(source)) {
-            index = funcType.getLocalMap().get(source);
-            ga.loadLocal(index, Type.getType(type.getDescriptor()));
+        val index: Int
+        val source = expression.identifier.source
+        if (funcType.localMap.containsKey(source)) {
+            index = funcType.localMap[source]!!
+            ga!!.loadLocal(index, Type.getType(type.descriptor))
         } else {
-            index = funcType.getArgMap().getOrDefault(source, -1);
+            index = funcType.argMap.getOrDefault(source, -1)!!
             if (index == -1) {
-                new IdentifierNotFoundException().send(api, file, expr, source);
-                return Optional.empty();
+                IdentifierNotFoundException().send(api, file, expression, source)
+                return Optional.empty()
             }
-            ga.loadArg(index);
+            ga!!.loadArg(index)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для условного оператора if, включая ветку else если она присутствует.
-     * @param stmt Оператор if
+     * @param statement Оператор if
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitIf(IfStatement stmt) {
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
-        Label endLabel = new Label();
-        Label falseLabel = new Label();
+    override fun visitIf(statement: IfStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
+        val endLabel = Label()
+        val falseLabel = Label()
 
-        stmt.condition.accept(this);
+        statement.condition.accept(this)
 
-        currentContext = stmt.trueBlock.context;
-        ga.ifZCmp(GeneratorAdapter.EQ, falseLabel);
-        stmt.trueBlock.accept(this);
-        ga.goTo(endLabel);
-        ga.mark(falseLabel);
-        if (stmt.falseStatement != null) stmt.falseStatement.accept(this);
-        ga.mark(endLabel);
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = statement.trueBlock.context
+        ga!!.ifZCmp(GeneratorAdapter.EQ, falseLabel)
+        statement.trueBlock.accept(this)
+        ga.goTo(endLabel)
+        ga.mark(falseLabel)
+        statement.falseStatement?.accept(this)
+        ga.mark(endLabel)
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает оператор использования (use). Не требует генерации байт-кода.
-     * @param stmt Оператор use
+     * @param statement Оператор use
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitUse(UseStatement stmt) {
-        return Optional.empty();
+    override fun visitUse(statement: UseStatement): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает доступ по индексу. В данный момент не реализовано.
-     * @param expr Выражение доступа по индексу
+     * @param expression Выражение доступа по индексу
      * @return Выбрасывает NotImplementedException
      */
-    @Override
-    public Optional<ClassWriter> visitIndexAccess(IndexAccessExpression expr) {
-        throw new NotImplementedException("method not implemented");
+    override fun visitIndexAccess(expression: IndexAccessExpression): Optional<ClassWriter> {
+        throw NotImplementedException("method not implemented")
     }
 
     /**
      * Генерирует байт-код для литералов встроенных типов (int, float, double, boolean, string).
-     * @param expr Выражение литерала
+     * @param expression Выражение литерала
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitLiteralExpr(LiteralExpression expr) {
-        if (expr.getRealType() instanceof BuiltInType bt) {
-            var transformed = TypeResolver.INSTANCE.getValueFromString(expr.literal.getSource(), BuiltInType.Companion.getFromToken(expr.literal.getType()));
-            var ga = functionStack.peek().getGa();
-            switch (bt) {
-                case INT -> ga.push((int) transformed);
-                case FLOAT -> ga.push((float) transformed);
-                case DOUBLE -> ga.push((double) transformed);
-                case BOOLEAN -> ga.push((boolean) transformed);
-                case STRING -> ga.push((String) transformed);
+    override fun visitLiteralExpr(expression: LiteralExpression): Optional<ClassWriter> {
+        if (expression.realType is BuiltInType) {
+            val transformed =
+                TypeResolver.getValueFromString(expression.literal.source!!, getFromToken(expression.literal.type)!!)
+            val ga = functionStack.peek().ga
+            when (expression.realType) {
+                BuiltInType.INT -> ga!!.push(transformed as Int)
+                BuiltInType.FLOAT -> ga!!.push(transformed as Float)
+                BuiltInType.DOUBLE -> ga!!.push(transformed as Double)
+                BuiltInType.BOOLEAN -> ga!!.push(transformed as Boolean)
+                BuiltInType.STRING -> ga!!.push(transformed as String?)
             }
         } else {
-            new ImplementationException().send(api, source.file, expr, "This should never happen. All literals should be builtin, for now.");
+            ImplementationException().send(
+                api,
+                source.file,
+                expression,
+                "This should never happen. All literals should be builtin, for now."
+            )
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для создания списка литералов с помощью ListWrapper.
      * Каждый элемент добавляется через метод add ArrayList.
-     * @param expr Выражение списка литералов
+     * @param expression Выражение списка литералов
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitLiteralList(LiteralListExpression expr) {
-        var ga = functionStack.peek().getGa();
+    override fun visitLiteralList(expression: LiteralListExpression): Optional<ClassWriter> {
+        val ga = functionStack.peek().ga
 
-        ga.newInstance(IxionConstant.getListWrapperType());
-        ga.dup();
-        ga.push(((ListType) expr.getRealType()).getContentType().getName());
-        ga.invokeConstructor(IxionConstant.getListWrapperType(), new Method(IxionConstant.getInit(), "(Ljava/lang/String;)V"));
-        ga.dup();
-        ga.invokeVirtual(IxionConstant.getListWrapperType(), new Method("list", "()Ljava/util/ArrayList;"));
+        ga!!.newInstance(ListWrapperType)
+        ga.dup()
+        ga.push((expression.realType as ListType).contentType.name)
+        ga.invokeConstructor(ListWrapperType, Method(Init, "(Ljava/lang/String;)V"))
+        ga.dup()
+        ga.invokeVirtual(ListWrapperType, Method("list", "()Ljava/util/ArrayList;"))
 
-        for (var entry : expr.entries) {
-            ga.dup();
+        for (entry in expression.entries) {
+            ga.dup()
 
-            entry.accept(this);
-            var rt = entry.getRealType();
-            if (rt instanceof BuiltInType bt) {
-                bt.doBoxing(ga);
+            entry.accept(this)
+            val rt = entry.realType
+            if (rt is BuiltInType) {
+                rt.doBoxing(ga)
             }
-            ga.invokeVirtual(IxionConstant.getArrayListType(), new Method("add", "(Ljava/lang/Object;)Z"));
-            ga.pop();
+            ga.invokeVirtual(ArrayListType, Method("add", "(Ljava/lang/Object;)Z"))
+            ga.pop()
         }
-        ga.pop();
-        return Optional.empty();
+        ga.pop()
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для оператора match, преобразуя его в последовательность проверок instanceof и условных переходов.
      * Поддерживает сопоставление с типами ListType, BuiltInType и StructType.
-     * @param casee Оператор match
+     * @param statement Оператор match
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitMatch(final CaseStatement casee) {
+    override fun visitMatch(statement: CaseStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
 
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
+        statement.expression.accept(this)
+        val localExprIndex = ga!!.newLocal(ObjectType)
+        val s = "bruh"
+        funcType.localMap[s] = localExprIndex
+        ga.storeLocal(localExprIndex)
 
-        casee.expression.accept(this);
-        int localExprIndex = ga.newLocal(IxionConstant.getObjectType());
-        var s = "bruh";
-        funcType.getLocalMap().put(s, localExprIndex);
-        ga.storeLocal(localExprIndex);
-
-        for (TypeStatement typeStmt : casee.cases.keySet()) {
-            var pair = casee.cases.get(typeStmt);
-            var scopedName = pair.getValue0();
-            var block = pair.getValue1();
-            var t = casee.types.get(typeStmt);
-            if (t instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.getTypeName());
+        for (typeStmt in statement.cases.keys) {
+            val pair = statement.cases[typeStmt]
+            val scopedName = pair!!.first
+            val block = pair.second
+            var t = statement.types[typeStmt]
+            if (t is UnknownType) {
+                val attempt = currentContext!!.getVariable(t.typeName)
                 if (attempt != null) {
-                    t = attempt;
+                    t = attempt
                 }
             }
 
-            var end = new Label();
-            ga.loadLocal(localExprIndex);
+            val end = Label()
+            ga.loadLocal(localExprIndex)
 
-            if (t instanceof ListType lt) {
-                ga.instanceOf(IxionConstant.getListWrapperType());
-                ga.visitJumpInsn(Opcodes.IFEQ, end);
-                ga.loadLocal(localExprIndex);
-                ga.checkCast(IxionConstant.getListWrapperType());
-                ga.storeLocal(localExprIndex);
+            if (t is ListType) {
+                ga.instanceOf(ListWrapperType)
+                ga.visitJumpInsn(Opcodes.IFEQ, end)
+                ga.loadLocal(localExprIndex)
+                ga.checkCast(ListWrapperType)
+                ga.storeLocal(localExprIndex)
 
-                ga.loadLocal(localExprIndex);
-                funcType.getGa().invokeVirtual(IxionConstant.getListWrapperType(), new Method("name", "()Ljava/lang/String;"));
-                ga.push(lt.getContentType().getName());
-                funcType.getGa().invokeVirtual(Type.getType(String.class), new Method("equals", "(Ljava/lang/Object;)Z"));
-                ga.visitJumpInsn(Opcodes.IFEQ, end);
-                ga.loadLocal(localExprIndex);
-
+                ga.loadLocal(localExprIndex)
+                funcType.ga!!.invokeVirtual(ListWrapperType, Method("name", "()Ljava/lang/String;"))
+                ga.push(t.contentType.name)
+                funcType.ga!!.invokeVirtual(Type.getType(String::class.java), Method("equals", "(Ljava/lang/Object;)Z"))
+                ga.visitJumpInsn(Opcodes.IFEQ, end)
+                ga.loadLocal(localExprIndex)
             } else {
-                Type typeClass;
-                if (t instanceof BuiltInType) {
-                    typeClass = Type.getType(t.getTypeClass());
-                } else if (t instanceof StructType st) {
-                    typeClass = Type.getType("L" + st.getQualifiedName() + ";");
-                } else {
-                    typeClass = Type.getType(t.getDescriptor());
-                }
-                ga.instanceOf(typeClass);
-                ga.visitJumpInsn(Opcodes.IFEQ, end);
-                ga.loadLocal(localExprIndex);
-                ga.checkCast(typeClass);
+                val typeClass: Type? =
+                    when (t) {
+                        is BuiltInType -> Type.getType(t.typeClass)
+                        is StructType -> Type.getType("L" + t.qualifiedName + ";")
+                        else -> Type.getType(t!!.descriptor)
+                    }
+                ga.instanceOf(typeClass)
+                ga.visitJumpInsn(Opcodes.IFEQ, end)
+                ga.loadLocal(localExprIndex)
+                ga.checkCast(typeClass)
             }
 
-            if (t instanceof BuiltInType bt && bt.isNumeric()) {
-                bt.unboxNoCheck(ga);
+            if (t is BuiltInType && t.isNumeric) {
+                t.unboxNoCheck(ga)
 
-                int localPrimitiveType = ga.newLocal(Type.getType(CollectionUtil.convert(bt.getTypeClass())));
-                ga.storeLocal(localPrimitiveType);
-                funcType.getLocalMap().put(scopedName, localPrimitiveType);
+                val localPrimitiveType = ga.newLocal(Type.getType(CollectionUtil.convert(t.typeClass!!)))
+                ga.storeLocal(localPrimitiveType)
+                funcType.localMap[scopedName] = localPrimitiveType
             } else {
-                int localObjectType = ga.newLocal(IxionConstant.getObjectType());
-                ga.storeLocal(localObjectType);
-                funcType.getLocalMap().put(scopedName, localObjectType);
+                val localObjectType = ga.newLocal(ObjectType)
+                ga.storeLocal(localObjectType)
+                funcType.localMap[scopedName] = localObjectType
             }
 
-            currentContext = block.context;
-            block.accept(this);
-            currentContext = currentContext.parent;
+            currentContext = block.context
+            block.accept(this)
+            currentContext = currentContext!!.parent
 
-            ga.mark(end);
+            ga.mark(end)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает доступ к модулю. Не требует генерации байт-кода.
-     * @param expr Выражение доступа к модулю
+     * @param expression Выражение доступа к модулю
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitModuleAccess(ModuleAccessExpression expr) {
-        return Optional.empty();
+    override fun visitModuleAccess(expression: ModuleAccessExpression): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Обрабатывает оператор параметра. В данный момент не реализовано.
-     * @param stmt Оператор параметра
+     * @param statement Оператор параметра
      * @return Выбрасывает NotImplementedException
      */
-    @Override
-    public Optional<ClassWriter> visitParameterStmt(ParameterStatement stmt) {
-
-        throw new NotImplementedException("method not implemented");
+    override fun visitParameterStmt(statement: ParameterStatement): Optional<ClassWriter> {
+        throw NotImplementedException("method not implemented")
     }
 
     /**
      * Генерирует байт-код для постфиксных операций (инкремент/декремент) над переменными встроенных типов.
-     * @param expr Постфиксное выражение
+     * @param expression Постфиксное выражение
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitPostfixExpr(PostfixExpression expr) {
+    override fun visitPostfixExpr(expression: PostfixExpression): Optional<ClassWriter> {
+        val ga = functionStack.peek().ga!!
+        expression.expression.accept(this)
+        if (expression.realType is BuiltInType) {
+            (expression.realType as BuiltInType).pushOne(ga)
+            val op: Int = when (expression.operator.type) {
+                TokenType.PLUSPLUS -> (expression.realType as BuiltInType).addOpcode
+                TokenType.MINUSMINUS -> (expression.realType as BuiltInType).subtractOpcode
+                else -> throw IllegalStateException("Unexpected value: " + expression.operator.type)
+            }
 
-        var ga = functionStack.peek().getGa();
-        expr.expression.accept(this);
-        if (expr.getRealType() instanceof BuiltInType bt) {
-            bt.pushOne(ga);
-            int op = switch (expr.operator.getType()) {
-                case PLUSPLUS -> bt.getAddOpcode();
-                case MINUSMINUS -> bt.getSubtractOpcode();
-                default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
-            };
-
-            ga.visitInsn(op);
-            if (expr.expression instanceof IdentifierExpression eid) {
-
-                ga.storeLocal(functionStack.peek().getLocalMap().get(eid.identifier.getSource()));
+            ga.visitInsn(op)
+            if (expression.expression is IdentifierExpression) {
+                ga.storeLocal(functionStack.peek().localMap[expression.expression.identifier.source]!!)
             }
         } else {
-            IxApi.Companion.exit("postfix only works with builtin types", 49);
+            exit("postfix only works with builtin types", 49)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
@@ -818,67 +819,59 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
      * @param expr Префиксное выражение
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitPrefix(PrefixExpression expr) {
-        var ga = functionStack.peek().getGa();
+    override fun visitPrefix(expr: PrefixExpression): Optional<ClassWriter> {
+        val ga = functionStack.peek().ga
 
-        expr.right.accept(this);
+        expr.right.accept(this)
 
-        var t = expr.right.getRealType();
-        if (expr.operator.getType() == TokenType.SUB && t instanceof BuiltInType bt) {
-            ga.visitInsn(bt.getNegOpcode());
-            expr.setRealType(t);
+        val t = expr.right.realType
+        if (expr.operator.type == TokenType.SUB && t is BuiltInType) {
+            ga!!.visitInsn(t.negOpcode)
+            expr.realType = t
         }
-        return Optional.empty();
+
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для доступа к полям объекта, включая поддержку монотипизированных структур.
-     * @param expr Выражение доступа к свойству
+     * @param expression Выражение доступа к свойству
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitPropertyAccess(PropertyAccessExpression expr) {
-        var ga = functionStack.peek().getGa();
-        var t = expr.getRealType();
+    override fun visitPropertyAccess(expression: PropertyAccessExpression): Optional<ClassWriter> {
+        val ga = functionStack.peek().ga
 
-        var root = expr.expression;
-        var rootType = root.getRealType();
+        val root = expression.expression
+        val rootType = root.realType
 
-        if (rootType instanceof MonomorphizedStruct mst) {
+        if (rootType is MonomorphizedStruct) {
+            root.accept(this)
 
-            root.accept(this);
+            for (i in 0..<expression.typeChain.size - 1) {
+                val current = expression.typeChain[i]
+                val next = expression.typeChain[i + 1]
 
-            for (int i = 0; i < expr.typeChain.size() - 1; i++) {
-                var current = expr.typeChain.get(i);
-                var next = expr.typeChain.get(i + 1);
+                val key = (next as GenericType).key
 
-                var key = ((GenericType) next).getKey();
+                val r = rootType.resolved[key]
 
-                var r = mst.getResolved().get(key);
+                val fieldName = expression.identifiers[i].identifier.source
+                ga!!.getField(Type.getType(current!!.descriptor), fieldName, Type.getType(next.descriptor))
 
-                var fieldName = expr.identifiers.get(i).identifier.getSource();
-                ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
-
-                ga.checkCast(Type.getType(r.getDescriptor()));
-
-
+                ga.checkCast(Type.getType(r!!.descriptor))
             }
         } else {
+            root.accept(this)
 
-            root.accept(this);
-
-            for (int i = 0; i < expr.typeChain.size() - 1; i++) {
-                var current = expr.typeChain.get(i);
-                var next = expr.typeChain.get(i + 1);
-                var fieldName = expr.identifiers.get(i).identifier.getSource();
-                ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
-
-
+            for (i in 0..<expression.typeChain.size - 1) {
+                val current = expression.typeChain[i]
+                val next = expression.typeChain[i + 1]
+                val fieldName = expression.identifiers[i].identifier.source
+                ga!!.getField(Type.getType(current!!.descriptor), fieldName, Type.getType(next!!.descriptor))
             }
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
@@ -886,10 +879,8 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
      * @param expression Лямбда-выражение
      * @return Пустой Optional
      */
-    @NotNull
-    @Override
-    public Optional<ClassWriter> visitLambda(@NotNull LambdaExpression expression) {
-        return Optional.empty();
+    override fun visitLambda(expression: LambdaExpression): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
@@ -897,95 +888,92 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
      * @param expression Выражение доступа к перечислению
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitEnumAccess(EnumAccessExpression expression) {
-        return Optional.empty();
+    override fun visitEnumAccess(expression: EnumAccessExpression): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для оператора return, включая упаковку примитивных значений для функций с UnionType.
-     * @param stmt Оператор return
+     * @param statement Оператор return
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitReturnStmt(ReturnStatement stmt) {
-        var funcType = functionStack.peek();
-        if (!(stmt.expression instanceof EmptyExpression)) {
-            stmt.expression.accept(this);
+    override fun visitReturnStmt(statement: ReturnStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        if (statement.expression !is EmptyExpression) {
+            statement.expression!!.accept(this)
 
-            if (funcType.getReturnType() instanceof UnionType && stmt.expression.getRealType() instanceof BuiltInType bt) {
-                bt.doBoxing(funcType.getGa());
+            if (funcType.returnType is UnionType && statement.expression.realType is BuiltInType) {
+                (statement.expression.realType as BuiltInType).doBoxing(funcType.ga!!)
             }
 
-            var returnType = funcType.getReturnType();
-            if (returnType instanceof GenericType gt) {
-                returnType = DefType.Companion.getSpecializedType(funcType.getCurrentSpecialization(), gt.getKey());
+            var returnType: IxType? = funcType.returnType
+            if (returnType is GenericType) {
+                returnType = getSpecializedType(funcType.currentSpecialization!!, returnType.key)
             }
 
-            funcType.getGa().visitInsn(returnType.getReturnOpcode());
+            funcType.ga!!.visitInsn(returnType!!.returnOpcode)
         } else {
-            funcType.getGa().visitInsn(Opcodes.RETURN);
+            funcType.ga!!.visitInsn(Opcodes.RETURN)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для объявления структуры: создает внутренний класс с полями, конструктором и методом toString.
-     * @param struct Оператор структуры
+     * @param statement Оператор структуры
      * @return Optional с ClassWriter внутреннего класса
      */
-    @Override
-    public Optional<ClassWriter> visitStruct(StructStatement struct) {
-        var innerCw = new ClassWriter(CodegenVisitor.flags);
-        var structType = currentContext.getVariableTyped(struct.name.getSource(), StructType.class);
+    override fun visitStruct(statement: StructStatement): Optional<ClassWriter> {
+        val innerCw = ClassWriter(FLAGS)
+        val structType = currentContext!!.getVariableTyped<StructType?>(statement.name.source, StructType::class.java as Class<StructType?>)
 
-        String name = structType.getName();
-        String innerName = source.getFullRelativePath() + "$" + name;
+        val name = structType!!.name
+        val innerName = source.fullRelativePath + "$" + name
 
-        innerCw.visit(CodegenVisitor.CLASS_VERSION, IxionConstant.getPublicStatic(), innerName, null, "java/lang/Object", null);
-        cw.visitInnerClass(innerName, source.getFullRelativePath(), name, IxionConstant.getPublicStatic());
-        innerCw.visitOuterClass(source.getFullRelativePath(), name, "()V");
+        innerCw.visit(CLASS_VERSION, PublicStatic, innerName, null, "java/lang/Object", null)
+        cw.visitInnerClass(innerName, source.fullRelativePath, name, PublicStatic)
+        innerCw.visitOuterClass(source.fullRelativePath, name, "()V")
 
-        StringBuilder constructorDescriptor = new StringBuilder();
+        val constructorDescriptor = StringBuilder()
 
-        for (var pair : structType.getParameters()) {
-            IxType type = pair.getSecond();
-            var descriptor = type.getDescriptor();
-            String n = pair.getFirst();
+        for (pair in structType.parameters) {
+            val type = pair.second
+            val descriptor: String = type.descriptor!!
+            val n = pair.first
 
-            var fieldVisitor = innerCw.visitField(Opcodes.ACC_PUBLIC, n, descriptor, null, null);
-            fieldVisitor.visitEnd();
+            val fieldVisitor = innerCw.visitField(Opcodes.ACC_PUBLIC, n, descriptor, null, null)
+            fieldVisitor.visitEnd()
 
-            constructorDescriptor.append(descriptor);
+            constructorDescriptor.append(descriptor)
         }
 
-        var descriptor = "(" + constructorDescriptor + ")V";
-        MethodVisitor _mv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, IxionConstant.getInit(), descriptor, null, null);
-        var ga = new GeneratorAdapter(_mv, Opcodes.ACC_PUBLIC, IxionConstant.getInit(), descriptor);
+        var descriptor = "($constructorDescriptor)V"
+        val mv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, Init, descriptor, null, null)
+        val ga = GeneratorAdapter(mv, Opcodes.ACC_PUBLIC, Init, descriptor)
 
-        String ownerInternalName = source.getFullRelativePath() + "$" + name;
+        val ownerInternalName = source.fullRelativePath + "$" + name
 
-        ga.loadThis();
-        ga.invokeConstructor(IxionConstant.getObjectType(), new Method(IxionConstant.getInit(), "()V"));
+        ga.loadThis()
+        ga.invokeConstructor(ObjectType, Method(Init, "()V"))
 
-        for (int i = 0; i < structType.getParameters().size(); i++) {
-            IxType type = structType.getParameters().get(i).getSecond();
-            descriptor = type.getDescriptor();
-            String n = structType.getParameters().get(i).getFirst();
-            ga.visitVarInsn(Opcodes.ALOAD, 0);
-            ga.loadArg(i);
+        for (i in structType.parameters.indices) {
+            val type = structType.parameters[i].second
+            descriptor = type.descriptor!!
+            val n = structType.parameters[i].first
+            ga.visitVarInsn(Opcodes.ALOAD, 0)
+            ga.loadArg(i)
 
-            ga.visitFieldInsn(Opcodes.PUTFIELD, ownerInternalName, n, descriptor);
+            ga.visitFieldInsn(Opcodes.PUTFIELD, ownerInternalName, n, descriptor)
         }
 
-        ga.returnValue();
-        ga.endMethod();
+        ga.returnValue()
+        ga.endMethod()
 
-        BytecodeGenerator.addToString(innerCw, structType, constructorDescriptor.toString(), ownerInternalName);
+        BytecodeGenerator.addToString(innerCw, structType, constructorDescriptor.toString(), ownerInternalName)
 
-        structWriters.put(structType, innerCw);
+        structWriters[structType] = innerCw
 
-        return Optional.of(innerCw);
+        return Optional.of(innerCw)
     }
 
     /**
@@ -993,159 +981,170 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
      * @param statement Оператор типа
      * @return Выбрасывает NotImplementedException
      */
-    @Override
-    public Optional<ClassWriter> visitTypeAlias(TypeStatement statement) {
-        throw new NotImplementedException("method not implemented");
+    override fun visitTypeAlias(statement: TypeStatement): Optional<ClassWriter> {
+        throw NotImplementedException("method not implemented")
     }
 
     /**
      * Обрабатывает объявление union-типа. Не требует генерации байт-кода.
-     * @param unionTypeStmt Оператор union-типа
+     * @param statement Оператор union-типа
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitUnionType(UnionTypeStatement unionTypeStmt) {
-        return Optional.empty();
+    override fun visitUnionType(statement: UnionTypeStatement): Optional<ClassWriter> {
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для объявления переменной: вычисляет значение выражения и сохраняет в локальную переменную.
-     * @param stmt Оператор переменной
+     * @param statement Оператор переменной
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitVariable(VariableStatement stmt) {
-        var funcType = functionStack.peek();
-        stmt.expression.accept(this);
+    override fun visitVariable(statement: VariableStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        statement.expression.accept(this)
 
-        var type = currentContext.getVariable(stmt.identifier());
-        if (type instanceof GenericType gt) {
-            type = funcType.getCurrentSpecialization().get(gt.getKey());
+        var type = currentContext!!.getVariable(statement.identifier())
+        if (type is GenericType) {
+            type = funcType.currentSpecialization!![type.key]
         }
-        stmt.setLocalIndex(funcType.getGa().newLocal(Type.getType(type.getDescriptor())));
-        funcType.getLocalMap().put(stmt.identifier(), stmt.getLocalIndex());
-        funcType.getGa().storeLocal(stmt.getLocalIndex(), Type.getType(type.getDescriptor()));
+        statement.localIndex = funcType.ga!!.newLocal(Type.getType(type!!.descriptor))
+        funcType.localMap[statement.identifier()] = statement.localIndex
+        funcType.ga!!.storeLocal(statement.localIndex, Type.getType(type.descriptor))
 
-        if (stmt.expression instanceof PostfixExpression pe) {
-            pe.setLocalIndex(stmt.getLocalIndex());
+        if (statement.expression is PostfixExpression) {
+            statement.expression.localIndex = statement.localIndex
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Генерирует байт-код для цикла while с проверкой условия в начале каждой итерации.
-     * @param w Оператор while
+     * @param statement Оператор while
      * @return Пустой Optional
      */
-    @Override
-    public Optional<ClassWriter> visitWhile(WhileStatement w) {
+    override fun visitWhile(statement: WhileStatement): Optional<ClassWriter> {
+        val funcType = functionStack.peek()
+        val ga = funcType.ga
+        val endLabel = Label()
+        val startLabel = Label()
 
-        var funcType = functionStack.peek();
-        var ga = funcType.getGa();
-        Label endLabel = new Label();
-        Label startLabel = new Label();
+        ga!!.mark(startLabel)
+        statement.condition.accept(this)
 
-        ga.mark(startLabel);
-        w.condition.accept(this);
-
-        currentContext = w.block.context;
-        ga.ifZCmp(GeneratorAdapter.EQ, endLabel);
-        w.block.accept(this);
-        ga.goTo(startLabel);
-        ga.mark(endLabel);
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = statement.block.context
+        ga.ifZCmp(GeneratorAdapter.EQ, endLabel)
+        statement.block.accept(this)
+        ga.goTo(startLabel)
+        ga.mark(endLabel)
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
-    /**
-     * Приводит два выражения к общему типу и генерирует код для их вычисления.
-     * Используется для операций сравнения и арифметики.
-     * @param ga GeneratorAdapter для генерации байт-кода
-     * @param left Левое выражение
-     * @param right Правое выражение
-     * @param visitor Посетитель для рекурсивного посещения выражений
-     * @return Тип, к которому были приведены выражения
-     */
-    private static Type castAndAccept(GeneratorAdapter ga, Expression left, Expression right, CodegenVisitor visitor) {
-        int lWide = BuiltInType.Companion.getWidenings().getOrDefault((BuiltInType) left.getRealType(), -1);
-        int rWide = BuiltInType.Companion.getWidenings().getOrDefault((BuiltInType) right.getRealType(), -1);
-        var lType = Type.getType(left.getRealType().getDescriptor());
-        var rType = Type.getType(right.getRealType().getDescriptor());
+    companion object {
+        const val FLAGS: Int = ClassWriter.COMPUTE_FRAMES + ClassWriter.COMPUTE_MAXS
+        const val CLASS_VERSION: Int = 61
 
-        var cmpType = lType;
+        /**
+         * Приводит два выражения к общему типу и генерирует код для их вычисления.
+         * Используется для операций сравнения и арифметики.
+         * @param ga GeneratorAdapter для генерации байт-кода
+         * @param left Левое выражение
+         * @param right Правое выражение
+         * @param visitor Посетитель для рекурсивного посещения выражений
+         * @return Тип, к которому были приведены выражения
+         */
+        private fun castAndAccept(
+            ga: GeneratorAdapter,
+            left: Expression,
+            right: Expression,
+            visitor: CodegenVisitor
+        ): Type? {
+            val lWide: Int = widenings.getOrDefault(left.realType as BuiltInType, -1)!!
+            val rWide: Int = widenings.getOrDefault(right.realType as BuiltInType, -1)!!
+            val lType = Type.getType(left.realType.descriptor)
+            val rType = Type.getType(right.realType.descriptor)
 
-        if (lWide != -1 && rWide != -1) {
-            if (lWide > rWide) {
-                left.accept(visitor);
-                right.accept(visitor);
-                ga.cast(rType, lType);
-            } else if (lWide < rWide) {
-                left.accept(visitor);
-                ga.cast(lType, rType);
-                right.accept(visitor);
-                cmpType = rType;
+            var cmpType = lType
+
+            if (lWide != -1 && rWide != -1) {
+                if (lWide > rWide) {
+                    left.accept(visitor)
+                    right.accept(visitor)
+                    ga.cast(rType, lType)
+                } else if (lWide < rWide) {
+                    left.accept(visitor)
+                    ga.cast(lType, rType)
+                    right.accept(visitor)
+                    cmpType = rType
+                } else {
+                    left.accept(visitor)
+                    right.accept(visitor)
+                }
             } else {
-                left.accept(visitor);
-                right.accept(visitor);
+                left.accept(visitor)
+                right.accept(visitor)
             }
-        } else {
-            left.accept(visitor);
-            right.accept(visitor);
+            return cmpType
         }
-        return cmpType;
-    }
 
-    /**
-     * Генерирует байт-код для арифметических операций, включая приведение типов при необходимости.
-     * @param ga GeneratorAdapter для генерации байт-кода
-     * @param left Левое выражение
-     * @param right Правое выражение
-     * @param operator Токен оператора
-     * @param goalType Ожидаемый тип результата
-     * @param visitor Посетитель для рекурсивного посещения выражений
-     */
-    public static void arithmetic(GeneratorAdapter ga, Expression left, Expression right, Token operator, IxType goalType, CodegenVisitor visitor) {
-        if (left.getRealType().equals(right.getRealType())) {
-            left.accept(visitor);
-            right.accept(visitor);
-        } else {
-            if (left.getRealType() == BuiltInType.INT && right.getRealType() == BuiltInType.FLOAT) {
-                left.accept(visitor);
-                ga.visitInsn(Opcodes.I2F);
-                right.accept(visitor);
-                goalType = BuiltInType.FLOAT;
-            } else if (left.getRealType() == BuiltInType.FLOAT && right.getRealType() == BuiltInType.INT) {
-                left.accept(visitor);
-                right.accept(visitor);
-                ga.visitInsn(Opcodes.I2F);
-                goalType = BuiltInType.FLOAT;
-            } else if (left.getRealType() == BuiltInType.INT && right.getRealType() == BuiltInType.DOUBLE) {
-                left.accept(visitor);
-                ga.visitInsn(Opcodes.I2D);
-                right.accept(visitor);
-                goalType = BuiltInType.DOUBLE;
-            } else if (left.getRealType() == BuiltInType.DOUBLE && right.getRealType() == BuiltInType.INT) {
-                left.accept(visitor);
-                right.accept(visitor);
-                ga.visitInsn(Opcodes.I2D);
-                goalType = BuiltInType.DOUBLE;
+        /**
+         * Генерирует байт-код для арифметических операций, включая приведение типов при необходимости.
+         * @param ga GeneratorAdapter для генерации байт-кода
+         * @param left Левое выражение
+         * @param right Правое выражение
+         * @param operator Токен оператора
+         * @param goalType Ожидаемый тип результата
+         * @param visitor Посетитель для рекурсивного посещения выражений
+         */
+        fun arithmetic(
+            ga: GeneratorAdapter,
+            left: Expression,
+            right: Expression,
+            operator: Token,
+            goalType: IxType?,
+            visitor: CodegenVisitor
+        ) {
+            var goalType = goalType
+            if (left.realType == right.realType) {
+                left.accept(visitor)
+                right.accept(visitor)
+            } else {
+                if (left.realType === BuiltInType.INT && right.realType === BuiltInType.FLOAT) {
+                    left.accept(visitor)
+                    ga.visitInsn(Opcodes.I2F)
+                    right.accept(visitor)
+                    goalType = BuiltInType.FLOAT
+                } else if (left.realType === BuiltInType.FLOAT && right.realType === BuiltInType.INT) {
+                    left.accept(visitor)
+                    right.accept(visitor)
+                    ga.visitInsn(Opcodes.I2F)
+                    goalType = BuiltInType.FLOAT
+                } else if (left.realType === BuiltInType.INT && right.realType === BuiltInType.DOUBLE) {
+                    left.accept(visitor)
+                    ga.visitInsn(Opcodes.I2D)
+                    right.accept(visitor)
+                    goalType = BuiltInType.DOUBLE
+                } else if (left.realType === BuiltInType.DOUBLE && right.realType === BuiltInType.INT) {
+                    left.accept(visitor)
+                    right.accept(visitor)
+                    ga.visitInsn(Opcodes.I2D)
+                    goalType = BuiltInType.DOUBLE
+                }
             }
-
-        }
-        if (goalType instanceof BuiltInType bt) {
-
-            int op = switch (operator.getType()) {
-                case ADD -> bt.getAddOpcode();
-                case SUB -> bt.getSubtractOpcode();
-                case MUL -> bt.getMultiplyOpcode();
-                case DIV -> bt.getDivideOpcode();
-                case LT, GT, LE, GE -> 0;
-                default -> throw new IllegalStateException("Unexpected value: " + operator.getType());
-            };
-            ga.visitInsn(op);
-        } else {
-            IxApi.exit("need a test case here", 452);
+            if (goalType is BuiltInType) {
+                val op = when (operator.type) {
+                    TokenType.ADD -> goalType.addOpcode
+                    TokenType.SUB -> goalType.subtractOpcode
+                    TokenType.MUL -> goalType.multiplyOpcode
+                    TokenType.DIV -> goalType.divideOpcode
+                    TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE -> 0
+                    else -> throw IllegalStateException("Unexpected value: " + operator.type)
+                }
+                ga.visitInsn(op)
+            } else {
+                exit("need a test case here", 452)
+            }
         }
     }
 }

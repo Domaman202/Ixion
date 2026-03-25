@@ -54,9 +54,9 @@ data class IxApi(
         IxException.killIfErrors(this, "Correct parser errors before continuing.")
 
         for (filePath in compilationSet!!.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             val environmentVisitor = EnvironmentVisitor(this, source.rootContext, source)
-            source.acceptVisitor<Optional<IxType?>?>(environmentVisitor)
+            source.acceptVisitor(environmentVisitor)
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {
@@ -64,7 +64,7 @@ data class IxApi(
                         val identifier: String? = (stmt.stmt as PublicAccess).identifier()
                         val type = source.rootContext.getVariable(identifier)
                         if (type != null) {
-                            source.exports.put(identifier, type)
+                            source.exports[identifier] = type
                         }
                     }
                 }
@@ -74,12 +74,12 @@ data class IxApi(
         }
 
         for (filePath in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             for (s in source.imports.keys) {
-                val sourceFile = source.imports.get(s)
+                val sourceFile = source.imports[s]
                 val exportedMembers = sourceFile!!.exports
                 for (exportedName in exportedMembers.keys) {
-                    val exportedType = exportedMembers.get(exportedName)
+                    val exportedType = exportedMembers[exportedName]
                     val qualifiedName = sourceFile.name + "::" + exportedName
                     if (exportedType is DefType) {
                         exportedType.external = sourceFile
@@ -90,9 +90,9 @@ data class IxApi(
         }
 
         for (filePath in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             val typeCheckVisitor = TypeCheckVisitor(this, source.rootContext, source)
-            source.acceptVisitor<Optional<IxType?>?>(typeCheckVisitor)
+            source.acceptVisitor(typeCheckVisitor)
 
             IxException.killIfErrors(this, "Correct type errors before compilation can continue.")
         }
@@ -117,9 +117,9 @@ data class IxApi(
             val allByteUnits = bytecodeGenerator.generate(this, source)
             IxException.killIfErrors(this, "Correct build errors before compilation can complete.")
 
-            val byteUnit = allByteUnits.getValue0()!!.toByteArray()
+            val byteUnit = allByteUnits.first.toByteArray()
             val base = FilenameUtils.removeExtension(source.fullRelativePath)
-            var fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, base + ".class").toString()
+            var fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, "$base.class").toString()
             var tmp = File(fileName)
             tmp.getParentFile().mkdirs()
             var output: OutputStream?
@@ -131,7 +131,7 @@ data class IxApi(
                 exit("The above call to mkdirs() should have worked.", 9)
             }
 
-            for (p in allByteUnits.getValue1()!!.entries) {
+            for (p in allByteUnits.second.entries) {
                 val st = p.key
                 val innerCw = p.value
 
@@ -170,9 +170,9 @@ data class IxApi(
         IxException.killIfErrors(this, "Correct parser errors before continuing.")
 
         for (filePath in compilationSet!!.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             val environmentVisitor = EnvironmentVisitor(this, source.rootContext, source)
-            source.acceptVisitor<Optional<IxType?>?>(environmentVisitor)
+            source.acceptVisitor(environmentVisitor)
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {
@@ -180,7 +180,7 @@ data class IxApi(
                         val identifier: String? = (stmt.stmt as PublicAccess).identifier()
                         val type = source.rootContext.getVariable(identifier)
                         if (type != null) {
-                            source.exports.put(identifier, type)
+                            source.exports[identifier] = type
                         }
                     }
                 }
@@ -189,12 +189,12 @@ data class IxApi(
         }
 
         for (filePath in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             for (s in source.imports.keys) {
-                val sourceFile = source.imports.get(s)
+                val sourceFile = source.imports[s]
                 val exportedMembers = sourceFile!!.exports
                 for (exportedName in exportedMembers.keys) {
-                    val exportedType = exportedMembers.get(exportedName)
+                    val exportedType = exportedMembers[exportedName]
                     val qualifiedName = sourceFile.name + "::" + exportedName
                     if (exportedType is DefType) {
                         exportedType.external = sourceFile
@@ -205,9 +205,9 @@ data class IxApi(
         }
 
         for (filePath in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(filePath)!!
+            val source: IxFile = compilationSet[filePath]!!
             val typeCheckVisitor = TypeCheckVisitor(this, source.rootContext, source)
-            source.acceptVisitor<Optional<IxType?>?>(typeCheckVisitor)
+            source.acceptVisitor(typeCheckVisitor)
             IxException.killIfErrors(this, "Correct type errors before compilation can continue.")
         }
 
@@ -225,12 +225,12 @@ data class IxApi(
     @Throws(CompilerError::class)
     fun outputJava(compilationSet: MutableMap<String?, out IxFile>) {
         for (key in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(key)!!
+            val source: IxFile = compilationSet[key]!!
 
             val javaGenerator = JavaCodegenVisitor(this, source)
-            source.acceptVisitor<Optional<String?>?>(javaGenerator)
+            source.acceptVisitor(javaGenerator)
 
-            val javaCode = javaGenerator.getGeneratedCode()
+            val javaCode = javaGenerator.generatedCode
             val base = FilenameUtils.removeExtension(source.fullRelativePath)
             val packageName = if (base.contains("/"))
                 base.substring(0, base.lastIndexOf("/")).replace("/", ".")
@@ -254,7 +254,7 @@ data class IxApi(
             fullJavaFile.append(javaCode)
             fullJavaFile.append("}\n")
 
-            val fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, base + ".java").toString()
+            val fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, "$base.java").toString()
             val javaFile = File(fileName)
             javaFile.getParentFile().mkdirs()
 
@@ -266,7 +266,7 @@ data class IxApi(
                 exit("Error writing Java file: " + e.message, 9)
             }
 
-            generateStructJavaFiles(source, javaGenerator.getStructClasses())
+            generateStructJavaFiles(source, javaGenerator.structClasses)
         }
     }
 
@@ -297,7 +297,7 @@ data class IxApi(
 
             val fileName = Path.of(
                 source.projectRoot, IxionConstant.OUT_DIR,
-                basePackage.replace(".", "/"), structName + ".java"
+                basePackage.replace(".", "/"), "$structName.java"
             ).toString()
             val structFile = File(fileName)
             structFile.getParentFile().mkdirs()
@@ -350,13 +350,13 @@ data class IxApi(
         val source = IxFile(projectRoot, relativePath, name)
         debug("Parsing `" + source.file.getName() + "`")
 
-        compilationSet!!.put(FilenameUtils.separatorsToUnix(source.file.getPath()), source)
+        compilationSet!![FilenameUtils.separatorsToUnix(source.file.path)] = source
 
         val imports: MutableList<Pair<String?, String?>> = ArrayList<Pair<String?, String?>>()
 
         for (statement in source.statements) {
             if (statement is UseStatement) {
-                val requestedUse = statement.stringLiteral?.source
+                val requestedUse = statement.stringLiteral.source
                 debug("\tFound module `" + requestedUse + "`")
 
                 val relative = FilenameUtils.getPath(requestedUse)
@@ -387,7 +387,7 @@ data class IxApi(
                     exit("Issues with building import tree.", 67)
                 }
             } else {
-                source.addImport(normalizedPath, compilationSet.get(normalizedPath))
+                source.addImport(normalizedPath, compilationSet[normalizedPath])
             }
         }
 

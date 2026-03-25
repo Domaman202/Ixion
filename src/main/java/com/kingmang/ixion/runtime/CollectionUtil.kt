@@ -1,120 +1,113 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import com.kingmang.ixion.exception.Panic;
-import kotlin.Pair;
+import com.kingmang.ixion.exception.Panic
+import kotlin.Pair
+import java.util.*
+import java.util.function.BiConsumer
+import java.util.function.BiFunction
+import java.util.stream.Stream
+import javax.annotation.Nonnull
 
-import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-public class CollectionUtil {
-
-    public record IxListWrapper(ArrayList<?> list, String name) implements Iterable<Object>, Iterator<Object> {
-
-        private static int currentIndex = 0;
-
-        public IxListWrapper(String name) {
-            this(new ArrayList<>(), name);
+class CollectionUtil private constructor() {
+    companion object {
+        @JvmStatic
+        fun <A, B, O> zipMap(a: List<out A>, b: List<out B>, lambda: BiFunction<A, B, out O>): Stream<O> {
+            val l = ArrayList<O>()
+            if (a.size == b.size) {
+                val i1 = a.iterator()
+                val i2 = b.iterator()
+                while (i1.hasNext() && i2.hasNext()) {
+                    val o = lambda.apply(i1.next(), i2.next())
+                    l.add(o)
+                }
+            } else {
+                throw ArrayIndexOutOfBoundsException("Can't zip two Lists with differing number of elements.")
+            }
+            return l.stream()
         }
+
+        @JvmStatic
+        fun <A, B> zip(a: List<out A>, b: List<out B>, lambda: BiConsumer<A, in B>) {
+            if (a.size == b.size) {
+                val i1 = a.iterator()
+                val i2 = b.iterator()
+                while (i1.hasNext() && i2.hasNext()) {
+                    lambda.accept(i1.next(), i2.next())
+                }
+            } else {
+                throw ArrayIndexOutOfBoundsException("Can't zip two Lists with differing number of elements.")
+            }
+        }
+
+        @JvmStatic
+        @SafeVarargs
+        fun <T> set(vararg varargs: T): Set<T> = setOf(*varargs)
+
+        @JvmStatic
+        @SafeVarargs
+        fun <T> countedSet(vararg varargs: T): Map<T, Long> =
+            varargs.groupingBy { it }.eachCount().mapValues { it.value.toLong() }
+
+        @JvmStatic
+        fun <T> joinConjunction(collection: Collection<T>): String {
+            val strList = collection.map { it.toString() }
+            return when (strList.size) {
+                0 -> ""
+                1 -> strList[0]
+                2 -> strList.joinToString(" and ")
+                else -> strList.subList(0, strList.size - 1).joinToString(", ") + " and " + strList.last()
+            }
+        }
+
+        @JvmStatic
+        @SafeVarargs
+        fun <T> list(vararg i: T): List<T> = i.toList()
+
+        @JvmStatic
+        fun convert(c: Class<*>): Class<*>? = when (c) {
+            Integer::class.java -> Int::class.javaPrimitiveType
+            Float::class.java -> Float::class.javaPrimitiveType
+            Boolean::class.java -> Boolean::class.javaPrimitiveType
+            else -> null
+        }
+
+        @JvmStatic
+        fun getMethodDescriptor(parameters: List<Pair<String, IxType>>, returnType: IxType): String {
+            val parametersDescriptor = parameters.joinToString("", "(", ")") { it.second.descriptor.toString() }
+            val returnDescriptor = returnType.descriptor
+            return parametersDescriptor + returnDescriptor
+        }
+    }
+
+    data class IxListWrapper(
+        @get:JvmName("list")
+        val list: ArrayList<*>,
+        @get:JvmName("name")
+        val name: String
+    ) : Iterable<Any?>, Iterator<Any?> {
+
+        companion object {
+            @JvmStatic
+            private var currentIndex = 0
+        }
+
+        constructor(name: String) : this(ArrayList<Any?>(), name)
 
         @Nonnull
-        @Override
-        public Iterator<Object> iterator() {
-            currentIndex = 0;
-            return this;
+        override fun iterator(): Iterator<Any?> {
+            currentIndex = 0
+            return this
         }
 
-        @Override
-        public boolean hasNext() {
-            return currentIndex < list.size();
-        }
+        override fun hasNext(): Boolean = currentIndex < list.size
 
-        @Override
-        public Object next() {
+        override fun next(): Any? {
             if (!hasNext()) {
-                new Panic("no such element").send();
+                Panic("no such element").send()
             }
-            return list.get(currentIndex++);
+            return list[currentIndex++]
         }
 
-        @Override
-        @Nonnull
-        public String toString() {
-            return list.toString();
-        }
-
-
-    }
-
-
-    public static <A, B, O> Stream<O> zipMap(List<? extends A> a, List<? extends B> b, BiFunction<A, B, ? extends O> lambda) throws ArrayIndexOutOfBoundsException {
-        var l = new ArrayList<O>();
-        if (a.size() == b.size()) {
-            var i1 = a.iterator();
-            var i2 = b.iterator();
-            while (i1.hasNext() && i2.hasNext()) {
-                var o = lambda.apply(i1.next(), i2.next());
-                l.add(o);
-            }
-        } else {
-            throw new ArrayIndexOutOfBoundsException("Can't zip two Lists with differing number of elements.");
-        }
-        return l.stream();
-    }
-
-    public static <A, B, O> void zip(List<? extends A> a, List<? extends B> b, BiConsumer<A, ? super B> lambda) throws ArrayIndexOutOfBoundsException {
-        if (a.size() == b.size()) {
-            var i1 = a.iterator();
-            var i2 = b.iterator();
-            while (i1.hasNext() && i2.hasNext()) {
-                lambda.accept(i1.next(), i2.next());
-            }
-        } else {
-            throw new ArrayIndexOutOfBoundsException("Can't zip two Lists with differing number of elements.");
-        }
-    }
-
-    @SafeVarargs
-    public static <T> Set<T> set(T... varargs) {
-        return Set.of(varargs);
-    }
-
-    @SafeVarargs
-    public static <T> Map<T, Long> countedSet(T... varargs) {
-        return Arrays.stream(varargs).collect(Collectors.groupingBy(s -> s,
-                Collectors.counting()));
-    }
-
-
-    public static <T> String joinConjunction(Collection<T> collection) {
-        var strList = collection.stream().map(Objects::toString).toList();
-        if (strList.isEmpty()) return "";
-        if (strList.size() == 1) return strList.getFirst();
-        if (strList.size() == 2) return String.join(" and ", strList);
-        return String.join(", ", strList.subList(0, strList.size() - 1)) + " and " + strList.getLast();
-    }
-
-    @SafeVarargs
-    public static <T> List<T> list(T... i) {
-        return Arrays.asList(i);
-    }
-
-    public static Class<?> convert(Class<?> c) {
-        if (c == Integer.class) return int.class;
-        if (c == Float.class) return float.class;
-        if (c == Boolean.class) return boolean.class;
-
-        return null;
-    }
-
-    public static String getMethodDescriptor(List<Pair<String, IxType>> parameters, IxType returnType) {
-        String parametersDescriptor = parameters.stream()
-                .map(parameter -> parameter.getSecond().getDescriptor())
-                .collect(Collectors.joining("", "(", ")"));
-        String returnDescriptor = returnType.getDescriptor();
-        return parametersDescriptor + returnDescriptor;
+        override fun toString(): String = list.toString()
     }
 }

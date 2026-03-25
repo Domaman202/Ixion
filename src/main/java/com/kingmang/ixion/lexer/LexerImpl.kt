@@ -1,336 +1,332 @@
-package com.kingmang.ixion.lexer;
+package com.kingmang.ixion.lexer
 
-import java.io.*;
+import com.kingmang.ixion.lexer.TokenType.Companion.find
+import org.apache.commons.lang3.StringEscapeUtils
+import java.io.File
+import java.io.FileReader
+import java.io.IOException
+import java.io.PushbackReader
+import java.lang.String
+import kotlin.Boolean
+import kotlin.Char
+import kotlin.Int
+import kotlin.charArrayOf
+import kotlin.code
 
-public class LexerImpl implements Lexer{
-    private final StringBuilder sb = new StringBuilder();
-    private final PushbackReader reader;
-    public int line = 1;
-    public int col = 1;
+class LexerImpl(file: File) : Lexer {
+    private val sb = StringBuilder()
+    private val reader: PushbackReader = PushbackReader(FileReader(file), 5)
+    var line: Int = 1
+    var col: Int = 1
 
-    public LexerImpl(File file) throws FileNotFoundException {
-        this.reader = new PushbackReader(new FileReader(file), 5);
-    }
+    override fun tokenize(): Token? {
+        skipWhitespace()
 
-    @Override
-    public Token tokenize() {
-        skipWhitespace();
+        val startLine = line
+        val startCol = col
+        val currentChar = peek()
 
-        int startLine = line;
-        int startCol = col;
-        char currentChar = peek();
-
-        if (currentChar == '\0') {
-            return new Token(TokenType.EOF, startLine, startCol, null);
+        if (currentChar == '\u0000') {
+            return Token(TokenType.EOF, startLine, startCol, null)
         }
 
         if (isAlpha(currentChar)) {
-            return consumeIdentifierToken(startLine, startCol);
+            return consumeIdentifierToken(startLine, startCol)
         }
 
         if (isDigit(currentChar)) {
-            return consumeNumberToken(startLine, startCol);
+            return consumeNumberToken(startLine, startCol)
         }
 
         if (currentChar == '"') {
-            return consumeStringToken(startLine, startCol);
+            return consumeStringToken(startLine, startCol)
         }
 
         if (currentChar == '\'') {
-            return consumeCharToken(startLine, startCol);
+            return consumeCharToken(startLine, startCol)
         }
 
-        return consumeOperatorToken(startLine, startCol);
+        return consumeOperatorToken(startLine, startCol)
     }
 
 
-    void skipWhitespace() {
+    fun skipWhitespace() {
         while (true) {
-            char currentChar = peek();
+            val currentChar = peek()
 
-            switch (currentChar) {
-                case ' ':
-                case '\r':
-                case '\t':
-                case '\n':
-                    advance();
-                    break;
-
-                case '/':
-                    handleComment();
-                    break;
-
-                default:
-                    return;
+            when (currentChar) {
+                ' ', '\r', '\t', '\n' -> advance()
+                '/' -> handleComment()
+                else -> return
             }
         }
     }
 
-    private void handleComment() {
-        char nextChar = peekNext();
+    private fun handleComment() {
+        val nextChar = peekNext()
 
         if (nextChar == '/') {
-            skipSingleLineComment();
+            skipSingleLineComment()
         } else if (nextChar == '*') {
-            skipMultiLineComment();
+            skipMultiLineComment()
         }
     }
 
 
-    private void skipSingleLineComment() {
-        advance();
-        advance();
+    private fun skipSingleLineComment() {
+        advance()
+        advance()
 
-        while (peek() != '\n' && peek() != '\0') {
-            advance();
+        while (peek() != '\n' && peek() != '\u0000') {
+            advance()
         }
     }
 
-    private void skipMultiLineComment() {
-        advance();
-        advance();
+    private fun skipMultiLineComment() {
+        advance()
+        advance()
 
-        String nextTwoChars;
+        var nextTwoChars: kotlin.String
         do {
-            advance();
-            nextTwoChars = String.valueOf(peek()) + peekNext();
-        } while (!nextTwoChars.equals("*/"));
+            advance()
+            nextTwoChars = peek().toString() + peekNext()
+        } while (nextTwoChars != "*/")
 
-        advance();
-        advance();
+        advance()
+        advance()
     }
 
-    private Token consumeCharToken(int line, int col) {
-        advance();
+    private fun consumeCharToken(line: Int, col: Int): Token {
+        advance()
 
-        char currentChar = peek();
-        char charValue;
+        val currentChar = peek()
+        val charValue: Char
 
         if (currentChar == '\\') {
-            advance();
-            char escapeChar = peek();
-            charValue = switch (escapeChar) {
-                case 'n' -> '\n';
-                case 't' -> '\t';
-                case 'r' -> '\r';
-                case 'b' -> '\b';
-                case 'f' -> '\f';
-                case '\'' -> '\'';
-                case '\\' -> '\\';
-                case '0' -> '\0';
-                default -> {
-                    advance();
-                    yield '\\';
+            advance()
+            val escapeChar = peek()
+            charValue = when (escapeChar) {
+                'n' -> '\n'
+                't' -> '\t'
+                'r' -> '\r'
+                'b' -> '\b'
+                'f' -> '\u000c'
+                '\'' -> '\''
+                '\\' -> '\\'
+                '0' -> '\u0000'
+                else -> {
+                    advance()
+                    '\\'
                 }
-            };
-            advance();
+            }
+            advance()
         } else {
-            charValue = currentChar;
-            advance();
+            charValue = currentChar
+            advance()
         }
 
         if (peek() != '\'') {
-            return new Token(TokenType.ERROR, line, col, "Unterminated character literal");
+            return Token(TokenType.ERROR, line, col, "Unterminated character literal")
         }
 
-        advance();
+        advance()
 
-        return new Token(TokenType.CHAR, line, col, String.valueOf(charValue));
+        return Token(TokenType.CHAR, line, col, charValue.toString())
     }
 
-    private char advance() {
+    private fun advance(): Char {
         try {
-            int charCode = reader.read();
-            if (charCode == -1) return '\0';
+            val charCode = reader.read()
+            if (charCode == -1) return '\u0000'
 
-            if (charCode == '\n') {
-                line++;
-                col = 1;
+            if (charCode == '\n'.code) {
+                line++
+                col = 1
             } else {
-                col++;
+                col++
             }
 
-            return (char) charCode;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return '\0';
+            return charCode.toChar()
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return '\u0000'
         }
     }
 
-    private String clearStringBuilder() {
-        String result = sb.toString();
-        sb.setLength(0);
-        return result;
+    private fun clearStringBuilder(): kotlin.String {
+        val result = sb.toString()
+        sb.setLength(0)
+        return result
     }
 
-    private Token consumeIdentifierToken(int line, int col) {
-        String identifier = consumeIdentifier();
-        TokenType tokenType = TokenType.IDENTIFIER;
+    private fun consumeIdentifierToken(line: Int, col: Int): Token {
+        val identifier = consumeIdentifier()
+        var tokenType: TokenType? = TokenType.IDENTIFIER
 
-        TokenType keywordType = TokenType.Companion.find(identifier);
+        val keywordType = find(identifier)
         if (keywordType != null) {
-            tokenType = keywordType;
+            tokenType = keywordType
         }
 
-        return new Token(tokenType, line, col, identifier);
+        return Token(tokenType!!, line, col, identifier)
     }
 
-    private String consumeIdentifier() {
+    private fun consumeIdentifier(): kotlin.String {
         while (isAlphaNumeric(peek())) {
-            sb.append(advance());
+            sb.append(advance())
         }
-        return clearStringBuilder();
+        return clearStringBuilder()
     }
 
 
-    private Token consumeNumberToken(int line, int col) {
-        TokenType type = TokenType.INT;
+    private fun consumeNumberToken(line: Int, col: Int): Token {
+        var type = TokenType.INT
 
-        consumeIntegerPart();
+        consumeIntegerPart()
 
         if (peek() == '.') {
-            type = TokenType.FLOAT;
-            consumeDecimalPart();
+            type = TokenType.FLOAT
+            consumeDecimalPart()
         }
 
-        consumeFloatSuffix(type);
-        consumeExponentPart();
-        consumeDoubleSuffix();
+        consumeFloatSuffix(type)
+        consumeExponentPart()
+        consumeDoubleSuffix()
 
-        String value = clearStringBuilder();
-        return new Token(type, line, col, value);
+        val value = clearStringBuilder()
+        return Token(type, line, col, value)
     }
 
 
-    private void consumeIntegerPart() {
+    private fun consumeIntegerPart() {
         while (isDigit(peek())) {
-            sb.append(advance());
+            sb.append(advance())
         }
     }
 
 
-    private void consumeDecimalPart() {
-        sb.append(advance()); // consume '.'
+    private fun consumeDecimalPart() {
+        sb.append(advance()) // consume '.'
 
         while (isDigit(peek())) {
-            sb.append(advance());
+            sb.append(advance())
         }
     }
 
 
-    private void consumeFloatSuffix(TokenType type) {
+    private fun consumeFloatSuffix(type: TokenType?) {
+        var type = type
         if (peek() == 'f') {
-            type = TokenType.FLOAT;
-            sb.append(advance());
+            type = TokenType.FLOAT
+            sb.append(advance())
         }
     }
 
 
-    private void consumeExponentPart() {
-        char currentChar = peek();
+    private fun consumeExponentPart() {
+        var currentChar = peek()
         if (currentChar == 'e' || currentChar == 'E') {
-            sb.append(advance());
+            sb.append(advance())
 
-            currentChar = peek();
+            currentChar = peek()
             if (currentChar == '-' || currentChar == '+') {
-                sb.append(advance());
+                sb.append(advance())
             }
 
             while (isDigit(peek())) {
-                sb.append(advance());
+                sb.append(advance())
             }
         }
     }
 
 
-    private void consumeDoubleSuffix() {
+    private fun consumeDoubleSuffix() {
         if (peek() == 'd') {
-            sb.append(advance());
+            sb.append(advance())
         }
     }
 
-    private Token consumeStringToken(int line, int col) {
-        advance();
+    private fun consumeStringToken(line: Int, col: Int): Token {
+        advance()
 
-        char currentChar = peek();
-        while (currentChar != '"' && currentChar != '\0') {
-            sb.append(advance());
-            currentChar = peek();
+        var currentChar = peek()
+        while (currentChar != '"' && currentChar != '\u0000') {
+            sb.append(advance())
+            currentChar = peek()
         }
 
-        advance();
+        advance()
 
-        String stringLiteral = clearStringBuilder();
-        String escapedString = stringLiteral.translateEscapes();
+        val stringLiteral = clearStringBuilder()
+        val escapedString: kotlin.String = StringEscapeUtils.unescapeJava(stringLiteral)
 
-        return new Token(TokenType.STRING, line, col, escapedString);
+        return Token(TokenType.STRING, line, col, escapedString)
     }
 
-    private Token consumeOperatorToken(int line, int col) {
-        char currentChar = peek();
-        char nextChar = peekNext();
-        String twoCharOperator = String.valueOf(new char[]{currentChar, nextChar});
+    private fun consumeOperatorToken(line: Int, col: Int): Token {
+        val currentChar = peek()
+        val nextChar = peekNext()
+        val twoCharOperator = String.valueOf(charArrayOf(currentChar, nextChar))
 
-        TokenType longToken = TokenType.Companion.find(twoCharOperator);
-        TokenType shortToken = TokenType.Companion.find(String.valueOf(currentChar));
+        val longToken = find(twoCharOperator)
+        val shortToken = find(currentChar.toString())
 
         if (longToken != null) {
-            advance();
-            advance();
-            return new Token(longToken, line, col, twoCharOperator);
+            advance()
+            advance()
+            return Token(longToken, line, col, twoCharOperator)
         }
 
         if (shortToken != null) {
-            advance();
-            return new Token(shortToken, line, col, String.valueOf(currentChar));
+            advance()
+            return Token(shortToken, line, col, currentChar.toString())
         }
 
-        advance();
-        advance();
-        return new Token(TokenType.ERROR, line, col, twoCharOperator);
+        advance()
+        advance()
+        return Token(TokenType.ERROR, line, col, twoCharOperator)
     }
 
-    private boolean isAlpha(char c) {
-        return Character.isLetter(c) || c == '_';
+    private fun isAlpha(c: Char): Boolean {
+        return Character.isLetter(c) || c == '_'
     }
 
-    private boolean isAlphaNumeric(char c) {
-        return isAlpha(c) || isDigit(c);
+    private fun isAlphaNumeric(c: Char): Boolean {
+        return isAlpha(c) || isDigit(c)
     }
 
-    private boolean isDigit(char c) {
-        return c >= '0' && c <= '9';
+    private fun isDigit(c: Char): Boolean {
+        return c >= '0' && c <= '9'
     }
 
 
-    private char peek() {
+    private fun peek(): Char {
         try {
-            int charCode = reader.read();
-            if (charCode == -1) return '\0';
+            val charCode = reader.read()
+            if (charCode == -1) return '\u0000'
 
-            reader.unread(charCode);
-            return (char) charCode;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return '\0';
+            reader.unread(charCode)
+            return charCode.toChar()
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return '\u0000'
         }
     }
 
-    private char peekNext() {
+    private fun peekNext(): Char {
         try {
-            int firstChar = reader.read();
-            int secondChar = reader.read();
+            val firstChar = reader.read()
+            val secondChar = reader.read()
 
-            if (secondChar == -1) return '\0';
+            if (secondChar == -1) return '\u0000'
 
-            reader.unread(secondChar);
-            reader.unread(firstChar);
+            reader.unread(secondChar)
+            reader.unread(firstChar)
 
-            return (char) secondChar;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return '\0';
+            return secondChar.toChar()
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return '\u0000'
         }
     }
-
 }

@@ -1,738 +1,684 @@
-package com.kingmang.ixion.typechecker;
+package com.kingmang.ixion.typechecker
 
-import com.kingmang.ixion.Visitor;
-import com.kingmang.ixion.api.Context;
-import com.kingmang.ixion.api.IxApi;
-import com.kingmang.ixion.api.IxFile;
-import com.kingmang.ixion.ast.*;
-import com.kingmang.ixion.exception.*;
-import com.kingmang.ixion.lexer.Position;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.runtime.*;
-import kotlin.Pair;
-import org.jetbrains.annotations.NotNull;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Stack;
-import java.util.stream.Collectors;
+import com.kingmang.ixion.Visitor
+import com.kingmang.ixion.api.Context
+import com.kingmang.ixion.api.IxApi
+import com.kingmang.ixion.api.IxApi.Companion.exit
+import com.kingmang.ixion.api.IxFile
+import com.kingmang.ixion.ast.*
+import com.kingmang.ixion.exception.*
+import com.kingmang.ixion.lexer.Position
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.runtime.*
+import com.kingmang.ixion.runtime.BuiltInType.Companion.widen
+import com.kingmang.ixion.runtime.CollectionUtil.Companion.zip
+import com.kingmang.ixion.typechecker.TypeResolver.typesMatch
+import java.io.File
+import java.lang.String
+import java.util.*
+import java.util.function.BiConsumer
+import java.util.function.Consumer
+import java.util.function.Predicate
+import kotlin.Any
+import kotlin.IllegalStateException
+import kotlin.Pair
 
 /**
  * Visitor for type checking and validation of AST nodes
  * Ensures type safety and resolves type information throughout the program
  */
-public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
-
-    public final Context rootContext;
-    public final File file;
-    public final IxApi ixApi;
-    private final Stack<DefType> functionStack = new Stack<>();
-    public Context currentContext;
+class TypeCheckVisitor(val ixApi: IxApi?, val rootContext: Context?, ixFile: IxFile) : Visitor<Optional<IxType>> {
+    val file: File = ixFile.file
+    private val functionStack = Stack<DefType>()
+    var currentContext: Context?
 
     /**
      * @param ixApi The API instance for error reporting
      * @param rootContext The root context for variable resolution
      * @param ixFile The source file being type checked
      */
-    public TypeCheckVisitor(IxApi ixApi, Context rootContext, IxFile ixFile) {
-        this.rootContext = rootContext;
-        this.file = ixFile.file;
-        this.currentContext = this.rootContext;
-        this.ixApi = ixApi;
+    init {
+        this.currentContext = this.rootContext
     }
 
-    @Override
-    public Optional<IxType> visit(Statement stmt) {
-        return stmt.accept(this);
+    override fun visit(statement: Statement): Optional<IxType> {
+        return statement.accept(this)
     }
 
     /**
      * @param statement Type alias statement to process
      * @return Empty optional as type aliases don't produce values
      */
-    @Override
-    public Optional<IxType> visitTypeAlias(TypeAliasStatement statement) {
-        var a = currentContext.getVariable(statement.identifier.getSource());
+    override fun visitTypeAlias(statement: TypeAliasStatement): Optional<IxType> {
+        val a = currentContext!!.getVariable(statement.identifier.source)
 
-        var resolvedTypes = new HashSet<IxType>();
-        if (a instanceof UnionType ut) {
-            extractedMethodForUnions(resolvedTypes, ut, statement);
+        val resolvedTypes = HashSet<IxType?>()
+        if (a is UnionType) {
+            extractedMethodForUnions(resolvedTypes, a, statement)
 
-            currentContext.setVariableType(statement.identifier(), ut);
+            currentContext!!.setVariableType(statement.identifier(), a)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
-     * @param expr Assignment expression to type check
+     * @param expression Assignment expression to type check
      * @return Empty optional as assignments don't produce values
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitAssignExpr(AssignExpression expr) {
-        expr.left.accept(this);
-        expr.right.accept(this);
+    override fun visitAssignExpr(expression: AssignExpression): Optional<IxType> {
+        expression.left.accept(this)
+        expression.right.accept(this)
 
-        switch (expr.left) {
-            case IdentifierExpression id -> {
-                if (expr.left.getRealType() != expr.right.getRealType()) {
-                    new BadAssignmentException().send(ixApi, file, expr, id.identifier.getSource());
+        when (expression.left) {
+            is IdentifierExpression -> {
+                if (expression.left.realType !== expression.right.realType) {
+                    BadAssignmentException().send(ixApi, file, expression, expression.left.identifier.source)
                 }
             }
-            case PropertyAccessExpression pa -> {
-                var lType = expr.left.getRealType();
-                var rType = expr.right.getRealType();
-                if (!TypeResolver.typesMatch(lType, rType)) {
-                    new ParameterTypeMismatchException().send(ixApi, file, expr.left, rType.getName());
-                }
 
+            is PropertyAccessExpression -> {
+                val lType = expression.left.realType
+                val rType = expression.right.realType
+                if (!typesMatch(lType, rType)) {
+                    ParameterTypeMismatchException().send(ixApi, file, expression.left, rType.name)
+                }
             }
-            default -> throw new IllegalStateException("Unexpected value: " + expr.left.getRealType());
+
+            else -> throw IllegalStateException("Unexpected value: " + expression.left.realType)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitBad(BadExpression expr) {
-        return Optional.empty();
+    override fun visitBad(expression: BadExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
-     * @param expr Binary expression to type check
+     * @param expression Binary expression to type check
      * @return Optional containing the result type of the binary operation
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitBinaryExpr(BinaryExpression expr) {
-        var t1 = expr.left.accept(this);
-        var t2 = expr.right.accept(this);
+    override fun visitBinaryExpr(expression: BinaryExpression): Optional<IxType> {
+        val t1: Optional<IxType> = expression.left.accept(this)
+        val t2: Optional<IxType> = expression.right.accept(this)
 
-        if (t1.isEmpty() || t2.isEmpty()) {
-            new ImplementationException().send(ixApi, file, expr, "Types in binary expression not determined.");
-            return Optional.empty();
+        if (t1.isEmpty || t2.isEmpty) {
+            ImplementationException().send(ixApi, file, expression, "Types in binary expression not determined.")
+            return Optional.empty()
         }
 
-        if (t1.get() == BuiltInType.ANY || t2.get() == BuiltInType.ANY) {
-            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
-            return Optional.empty();
+        if (t1.get() === BuiltInType.ANY || t2.get() === BuiltInType.ANY) {
+            CannotApplyOperatorException().send(ixApi, file, expression, expression.operator.source)
+            return Optional.empty()
         }
 
-        var totalType = t1.get();
+        var totalType: IxType? = t1.get()
 
-        switch (expr.operator.getType()) {
-            case ADD, SUB, MUL, DIV, MOD -> {
-                if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
-                    totalType = BuiltInType.Companion.widen(bt1, bt2);
+        when (expression.operator.type) {
+            TokenType.ADD, TokenType.SUB, TokenType.MUL, TokenType.DIV, TokenType.MOD -> {
+                if (t1.get() is BuiltInType && t2.get() is BuiltInType) {
+                    totalType = widen(t1.get() as BuiltInType, t2.get() as BuiltInType)
                 } else {
-                    new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
+                    CannotApplyOperatorException().send(ixApi, file, expression, expression.operator.source)
                 }
             }
-            case EQUAL, NOTEQUAL, LT, GT, LE, GE -> {
-                if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
-                    if (expr.operator.getType() != TokenType.EQUAL && expr.operator.getType() != TokenType.NOTEQUAL) {
-                        if (bt1 == BuiltInType.STRING || bt2 == BuiltInType.STRING) {
-                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
-                        } else if (bt1 == BuiltInType.BOOLEAN || bt2 == BuiltInType.BOOLEAN) {
-                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
 
+            TokenType.EQUAL, TokenType.NOTEQUAL, TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE -> {
+                if (t1.get() is BuiltInType && t2.get() is BuiltInType) {
+                    if (expression.operator.type != TokenType.EQUAL && expression.operator.type != TokenType.NOTEQUAL) {
+                        val bt1 = t1.get() as BuiltInType
+                        val bt2 = t2.get() as BuiltInType
+                        if (bt1 == BuiltInType.STRING || bt2 == BuiltInType.STRING) {
+                            CannotApplyOperatorException().send(ixApi, file, expression, expression.operator.source)
+                        } else if (bt1 == BuiltInType.BOOLEAN || bt2 == BuiltInType.BOOLEAN) {
+                            CannotApplyOperatorException().send(ixApi, file, expression, expression.operator.source)
                         }
                     }
-                    totalType = BuiltInType.BOOLEAN;
-                }
-            }
-            case AND, OR, XOR -> {
-                if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
-                    if (bt1 != BuiltInType.BOOLEAN || bt2 != BuiltInType.BOOLEAN) {
-                        new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
-                    }
-                    totalType = BuiltInType.BOOLEAN;
+                    totalType = BuiltInType.BOOLEAN
                 }
             }
 
-            default -> {
+            TokenType.AND, TokenType.OR, TokenType.XOR -> {
+                if (t1.get() is BuiltInType && t2.get() is BuiltInType) {
+                    if (t1.get() != BuiltInType.BOOLEAN || t2.get() != BuiltInType.BOOLEAN) {
+                        CannotApplyOperatorException().send(ixApi, file, expression, expression.operator.source)
+                    }
+                    totalType = BuiltInType.BOOLEAN
+                }
             }
+
+            else -> {}
         }
 
-        expr.left.setRealType(t1.get());
-        expr.right.setRealType(t2.get());
+        expression.left.realType = t1.get()
+        expression.right.realType = t2.get()
 
-        expr.setRealType(totalType);
+        expression.realType = totalType!!
 
-        return Optional.of(totalType);
+        return Optional.of(totalType)
     }
 
     /**
      * @param statement Block statement to type check
      * @return Empty optional as blocks don't produce values
      */
-    @Override
-    public Optional<IxType> visitBlockStmt(BlockStatement statement) {
-        for (var stmt : statement.statements) {
-            stmt.accept(this);
+    override fun visitBlockStmt(statement: BlockStatement): Optional<IxType> {
+        for (stmt in statement.statements) {
+            stmt!!.accept(this)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
-     * @param expr Function call expression to type check
+     * @param expression Function call expression to type check
      * @return Optional containing the return type of the function call
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitCall(CallExpression expr) {
-        var e = expr.item.accept(this);
-        if (e.isEmpty())
-            IxApi.exit("Type checking failed to resolve function in ["
-                    + expr.getPosition().getLine() + ":" + expr.getPosition().getCol()
-                    + "]", 95);
+    override fun visitCall(expression: CallExpression): Optional<IxType> {
+        val e: Optional<IxType> = expression.item.accept(this)
+        if (e.isEmpty) exit(
+            ("Type checking failed to resolve function in ["
+                    + expression.position!!.line + ":" + expression.position.col
+                    + "]"), 95
+        )
 
-        var t = e.orElseThrow();
-        if (t instanceof StructType st) {
-            if (st.getParameters().size() != expr.arguments.size()) {
-                var params = st.getParameters().stream().map(s -> s.getSecond().getName()).collect(Collectors.joining(", "));
-                new FunctionSignatureMismatchException().send(ixApi, file, expr.item, st.getName());
-                return Optional.empty();
+        val t: IxType = e.orElseThrow()!!
+        if (t is StructType) {
+            if (t.parameters.size != expression.arguments.size) {
+                FunctionSignatureMismatchException().send(ixApi, file, expression.item, t.name)
+                return Optional.empty()
             }
-            updateUnknownParameters(expr, st);
+            updateUnknownParameters(expression, t)
 
-            CollectionUtil.zip(st.getParameters(), expr.arguments, (param, arg) -> {
-                var at = arg.accept(this);
-                at.ifPresent(type -> typecheckCallParameters(param, arg, type));
-            });
+            zip(
+                t.parameters,
+                expression.arguments,
+                BiConsumer { param: Pair<kotlin.String, IxType>, arg: Expression ->
+                    val at: Optional<IxType> = arg.accept(this)
+                    at.ifPresent(Consumer { type: IxType? -> typecheckCallParameters(param, arg, type!!) })
+                })
         }
 
-        if (t instanceof DefType ft) {
-            var rt = ft.getReturnType();
-            if (ft.hasGenerics()) {
+        when (t) {
+            is DefType -> {
+                var rt = t.returnType
+                if (t.hasGenerics()) {
+                    val specialization = t.buildSpecialization(expression.arguments)
 
-                var specialization = ft.buildSpecialization(expr.arguments);
+                    t.specializations.add(specialization)
 
-                ft.getSpecializations().add(specialization);
-
-                if (rt instanceof GenericType) {
-                    rt = specialization.get(((GenericType) rt).getKey());
+                    if (rt is GenericType) {
+                        rt = specialization[rt.key]!!
+                    }
                 }
+
+                expression.realType = rt
+
+                return Optional.of(rt)
             }
 
-            expr.setRealType(rt);
+            is StructType -> {
+                expression.realType = t
+                return Optional.of(t)
+            }
 
-            return Optional.of(rt);
-        } else if (t instanceof StructType structType) {
-            expr.setRealType(structType);
-            return Optional.of(structType);
-        } else {
-            new MethodNotFoundException().send(ixApi, file, expr.item, String.valueOf(expr.item));
+            else -> {
+                MethodNotFoundException().send(ixApi, file, expression.item, String.valueOf(expression.item))
+            }
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitEmpty(EmptyExpression empty) {
-        return Optional.empty();
+    override fun visitEmpty(expression: EmptyExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
-     * @param emptyList Empty list expression to type check
+     * @param expression Empty list expression to type check
      * @return Optional containing the type of the empty list
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitEmptyList(EmptyListExpression emptyList) {
-        if (emptyList.getRealType() != null) {
-            return Optional.of(emptyList.getRealType());
-        }
-        if (!functionStack.isEmpty()) {
-            var functionType = functionStack.peek();
-
-            if (functionType.getReturnType() instanceof ListType) {
-                emptyList.setRealType(functionType.getReturnType());
-                return Optional.of(functionType.getReturnType());
-            }
-        }
-        new TypeNotResolvedException().send(ixApi, file, emptyList, "Cannot determine type of empty list");
-        return Optional.empty();
+    override fun visitEmptyList(expression: EmptyListExpression): Optional<IxType> {
+        return Optional.of(expression.realType)
     }
 
-    @Override
-    public Optional<IxType> visitEnum(EnumStatement statement) {
-        return Optional.empty();
+    override fun visitEnum(statement: EnumStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * @param statement Export statement to process
      * @return Empty optional as exports don't produce values
      */
-    @Override
-    public Optional<IxType> visitExport(ExportStatement statement) {
-        statement.stmt.accept(this);
-        return Optional.empty();
+    override fun visitExport(statement: ExportStatement): Optional<IxType> {
+        statement.stmt.accept(this)
+        return Optional.empty()
     }
 
     /**
      * @param statement Expression statement to type check
      * @return Optional containing the type of the expression
      */
-    @Override
-    public Optional<IxType> visitExpressionStmt(ExpressionStatement statement) {
-        return statement.expression.accept(this);
+    override fun visitExpressionStmt(statement: ExpressionStatement): Optional<IxType> {
+        return statement.expression.accept(this)
     }
 
     /**
      * @param statement For loop statement to type check
      * @return Empty optional as loops don't produce values
      */
-    @Override
-    public Optional<IxType> visitFor(ForStatement statement) {
+    override fun visitFor(statement: ForStatement): Optional<IxType> {
+        currentContext = statement.block.context
 
-        currentContext = statement.block.context;
-
-        var b = statement.expression.accept(this);
-        if (b.isPresent()) {
-            switch (b.get()) {
-                case ExternalType et -> {
-                    if (et.getFoundClass().getName().equals("java.util.Iterator")) {
-                        currentContext.setVariableType(statement.name.getSource(), BuiltInType.INT);
+        val b: Optional<IxType> = statement.expression.accept(this)
+        if (b.isPresent) {
+            when (b.get()) {
+                is ExternalType -> {
+                    if ((b.get() as ExternalType).foundClass!!.getName() == "java.util.Iterator") {
+                        currentContext!!.setVariableType(statement.name.source, BuiltInType.INT)
                     }
                 }
-                case ListType lt -> {
-                    currentContext.setVariableType(statement.name.getSource(), lt.getContentType());
+
+                is ListType-> {
+                    currentContext!!.setVariableType(statement.name.source, (b.get() as ListType).contentType)
                 }
-                default -> new NotIterableException().send(ixApi, file, statement.expression, b.get().getName());
+
+                else -> NotIterableException().send(ixApi, file, statement.expression, b.get().name)
             }
         }
 
-        statement.block.accept(this);
+        statement.block.accept(this)
 
-        currentContext = currentContext.parent;
+        currentContext = currentContext!!.parent
 
-        return Optional.empty();
-
+        return Optional.empty()
     }
 
     /**
      * @param statement Function statement to type check
      * @return Empty optional as function definitions don't produce values
      */
-    @Override
-    public Optional<IxType> visitFunctionStmt(DefStatement statement) {
-
-        var funcType = currentContext.getVariableTyped(statement.name.getSource(), DefType.class);
+    override fun visitFunctionStmt(statement: DefStatement): Optional<IxType> {
+        val funcType = currentContext!!.getVariableTyped<DefType?>(statement.name.source, DefType::class.java as Class<DefType?>)
         if (funcType != null) {
-            functionStack.add(funcType);
-            var childEnvironment = statement.body.context;
+            functionStack.add(funcType)
+            val childEnvironment = statement.body!!.context
 
-            var parametersBefore = funcType.getParameters();
-            var parametersAfter = new ArrayList<Pair<String, IxType>>();
+            val parametersBefore: MutableList<Pair<kotlin.String, IxType>> = funcType.parameters
+            val parametersAfter = ArrayList<Pair<kotlin.String, IxType>>()
 
-            for (var param : parametersBefore) {
-                if (param.getSecond() instanceof UnknownType ut) {
-                    var attempt = currentContext.getVariable(ut.getTypeName());
-                    if (attempt != null) {
-                        childEnvironment.setVariableType(param.getFirst(), attempt);
-                        var nt = new Pair<>(param.getFirst(), attempt);
-                        parametersAfter.add(nt);
-                    } else {
-                        new IdentifierNotFoundException().send(ixApi, file, statement, ut.getTypeName());
-                        parametersAfter.add(param);
+            for (param in parametersBefore) {
+                when (param.second) {
+                    is UnknownType -> {
+                        val attempt = currentContext!!.getVariable((param.second as UnknownType).typeName)
+                        if (attempt != null) {
+                            childEnvironment.setVariableType(param.first, attempt)
+                            val nt = Pair(param.first, attempt)
+                            parametersAfter.add(nt)
+                        } else {
+                            IdentifierNotFoundException().send(ixApi, file, statement, (param.second as UnknownType).typeName)
+                            parametersAfter.add(param)
+                        }
                     }
-                } else if (param.getSecond() instanceof UnionType ut) {
-                    parametersAfter.add(param);
-                    var resolvedTypes = new HashSet<IxType>();
-                    extractedMethodForUnions(resolvedTypes, ut, statement);
 
-                    currentContext.setVariableType(param.getFirst(), ut);
-                } else {
-                    parametersAfter.add(param);
+                    is UnionType -> {
+                        parametersAfter.add(param)
+                        val resolvedTypes = HashSet<IxType?>()
+                        extractedMethodForUnions(resolvedTypes, param.second as UnionType, statement)
 
+                        currentContext!!.setVariableType(param.first, param.second)
+                    }
+
+                    else -> {
+                        parametersAfter.add(param)
+                    }
                 }
             }
-            funcType.getParameters().clear();
-            funcType.getParameters().addAll(parametersAfter);
+            funcType.parameters.clear()
+            funcType.parameters.addAll(parametersAfter)
 
-            if (funcType.getReturnType() instanceof UnknownType ut) {
-                var attempt = currentContext.getVariable(ut.getTypeName());
+            if (funcType.returnType is UnknownType) {
+                val attempt = currentContext!!.getVariable((funcType.returnType as UnknownType).typeName)
                 if (attempt != null) {
-                    funcType.setReturnType(attempt);
+                    funcType.returnType = attempt
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, statement, ut.getTypeName());
+                    IdentifierNotFoundException().send(ixApi, file, statement, (funcType.returnType as UnknownType).typeName)
                 }
             }
 
-            currentContext = childEnvironment;
+            currentContext = childEnvironment
 
-            statement.body.accept(this);
+            statement.body.accept(this)
 
-            if (!funcType.getHasReturn2()) {
-                var returnStmt = new ReturnStatement(
-                        new Position(0, 0),
-                        new EmptyExpression(new Position(0, 0))
-                );
-                statement.body.statements.add(returnStmt);
+            if (!funcType.hasReturn2) {
+                val returnStmt = ReturnStatement(
+                    Position(0, 0),
+                    EmptyExpression(Position(0, 0))
+                )
+                statement.body.statements.add(returnStmt)
             }
 
-            currentContext = currentContext.parent;
-            functionStack.pop();
-
-
+            currentContext = currentContext!!.parent
+            functionStack.pop()
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
-     * @param expr Grouping expression to type check
+     * @param expression Grouping expression to type check
      * @return Optional containing the type of the grouped expression
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitGroupingExpr(GroupingExpression expr) {
-        return expr.expression.accept(this);
+    override fun visitGroupingExpr(expression: GroupingExpression): Optional<IxType> {
+        return expression.expression.accept(this)
     }
 
     /**
-     * @param expr Identifier expression to resolve
+     * @param expression Identifier expression to resolve
      * @return Optional containing the type of the identifier
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitIdentifierExpr(IdentifierExpression expr) {
-        var t = currentContext.getVariable(expr.identifier.getSource());
+    override fun visitIdentifierExpr(expression: IdentifierExpression): Optional<IxType> {
+        var t = currentContext!!.getVariable(expression.identifier.source)
         if (t != null) {
-            if (t instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.getTypeName());
+            if (t is UnknownType) {
+                val attempt = currentContext!!.getVariable(t.typeName)
                 if (attempt != null) {
-                    t = attempt;
+                    t = attempt
                 }
             }
-            expr.setRealType(t);
+            expression.realType = t
         } else {
-            new IdentifierNotFoundException().send(ixApi, file, expr, expr.identifier.getSource());
+            IdentifierNotFoundException().send(ixApi, file, expression, expression.identifier.source)
         }
-        return Optional.ofNullable(t);
+        return Optional.ofNullable(t)
     }
 
     /**
      * @param statement If statement to type check
      * @return Empty optional as if statements don't produce values
      */
-    @Override
-    public Optional<IxType> visitIf(IfStatement statement) {
-        currentContext = statement.trueBlock.context;
-        statement.condition.accept(this);
-        statement.trueBlock.accept(this);
-        if (statement.falseStatement != null) statement.falseStatement.accept(this);
+    override fun visitIf(statement: IfStatement): Optional<IxType> {
+        currentContext = statement.trueBlock.context
+        statement.condition.accept(this)
+        statement.trueBlock.accept(this)
+        statement.falseStatement?.accept(this)
 
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
-    @Override
-    public Optional<IxType> visitUse(UseStatement statement) {
-        return Optional.empty();
+    override fun visitUse(statement: UseStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitIndexAccess(IndexAccessExpression expr) {
-        return Optional.empty();
+    override fun visitIndexAccess(expression: IndexAccessExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
-     * @param expr Literal expression to type check
+     * @param expression Literal expression to type check
      * @return Optional containing the type of the literal
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitLiteralExpr(LiteralExpression expr) {
-        var t = expr.getRealType();
-        if (t == null) {
-            new ImplementationException().send(ixApi, file, expr, "This should never happen. All literals should be builtin, for now.");
-        }
-        return Optional.ofNullable(t);
+    override fun visitLiteralExpr(expression: LiteralExpression): Optional<IxType> {
+        return Optional.ofNullable(expression.realType)
     }
 
     /**
-     * @param expr List literal expression to type check
+     * @param expression List literal expression to type check
      * @return Optional containing the type of the list
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitLiteralList(LiteralListExpression expr) {
+    override fun visitLiteralList(expression: LiteralListExpression): Optional<IxType> {
+        val firstType: Optional<IxType> = expression.entries[0].accept(this)
 
-        var firstType = expr.entries.get(0).accept(this);
-
-        firstType.ifPresent(type -> {
-            expr.setRealType(new ListType(type));
-
-            for (int i = 0; i < expr.entries.size(); i++) {
-                var t = expr.entries.get(i).accept(this);
-                if (t.isPresent()) {
-                    if (!(t.get().equals(type))) {
-                        new ListTypeException().send(ixApi, file, expr.entries.get(i), t.get().getName());
-                        break;
+        firstType.ifPresent(Consumer { type: IxType? ->
+            expression.realType = ListType(type!!)
+            for (i in expression.entries.indices) {
+                val t: Optional<IxType> = expression.entries[i].accept(this)
+                if (t.isPresent) {
+                    if (t.get() != type) {
+                        ListTypeException().send(ixApi, file, expression.entries[i], t.get().name)
+                        break
                     }
                 }
             }
-        });
+        })
 
-        return Optional.of(expr.getRealType());
+        return Optional.of(expression.realType)
     }
 
     /**
      * @param statement Match statement to type check
      * @return Empty optional as match statements don't produce values
      */
-    @Override
-    public Optional<IxType> visitMatch(CaseStatement statement) {
-        statement.expression.accept(this);
+    override fun visitMatch(statement: CaseStatement): Optional<IxType> {
+        statement.expression.accept(this)
 
-        if (statement.expression.getRealType() instanceof UnionType ut) {
-            var typesToCover = new HashSet<>(ut.getTypes());
-            statement.cases.forEach((keyTypeStmt, pair) -> {
-                String id = pair.getValue0();
-                BlockStatement block = pair.getValue1();
-                var caseType = statement.types.get(keyTypeStmt);
-                if (caseType instanceof UnknownType ukt) {
-                    var attempt = currentContext.getVariable(ukt.getTypeName());
+        if (statement.expression.realType is UnionType) {
+            val typesToCover: HashSet<IxType> = HashSet<IxType>((statement.expression.realType as UnionType).types)
+            statement.cases.forEach(BiConsumer { keyTypeStmt: TypeStatement?, pair: Pair<kotlin.String, BlockStatement> ->
+                val id: kotlin.String = pair.first
+                val block: BlockStatement = pair.second
+                var caseType = statement.types[keyTypeStmt]
+                if (caseType is UnknownType) {
+                    val attempt = currentContext!!.getVariable(caseType.typeName)
                     if (attempt != null) {
-                        caseType = attempt;
+                        caseType = attempt
                     }
                 }
 
-                typesToCover.remove(caseType);
+                typesToCover.remove(caseType)
 
-                var childEnvironment = block.context;
-                childEnvironment.parent = currentContext;
-                childEnvironment.setVariableType(id, caseType);
+                val childEnvironment = block.context
+                childEnvironment.parent = currentContext
+                childEnvironment.setVariableType(id, caseType)
 
-                currentContext = childEnvironment;
-                block.accept(this);
-                currentContext = currentContext.parent;
-            });
+                currentContext = childEnvironment
+                block.accept(this)
+                currentContext = currentContext!!.parent
+            })
             if (!typesToCover.isEmpty()) {
-                new MatchCoverageException().send(ixApi, file, statement, String.valueOf(ut));
+                MatchCoverageException().send(ixApi, file, statement, String.valueOf((statement.expression.realType as UnionType)))
             }
-
-
         } else {
-            new TypeNotResolvedException().send(ixApi, file, statement.expression, "");
+            TypeNotResolvedException().send(ixApi, file, statement.expression, "")
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitModuleAccess(ModuleAccessExpression expr) {
-        expr.foreign.accept(this);
-        return Optional.empty();
+    override fun visitModuleAccess(expression: ModuleAccessExpression): Optional<IxType> {
+        expression.foreign.accept(this)
+        return Optional.empty()
     }
 
-    @Override
-    public Optional<IxType> visitParameterStmt(ParameterStatement statement) {
-        return Optional.empty();
+    override fun visitParameterStmt(statement: ParameterStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
-     * @param expr Postfix expression to type check
+     * @param expression Postfix expression to type check
      * @return Empty optional as postfix expressions don't produce new values
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPostfixExpr(PostfixExpression expr) {
-        expr.setRealType(expr.expression.accept(this).get());
+    override fun visitPostfixExpr(expression: PostfixExpression): Optional<IxType> {
+        expression.realType = expression.expression.accept(this).get()
 
-        if (!(expr.getRealType() instanceof BuiltInType bt && bt.isNumeric())) {
-            new CannotPostfixException().send(ixApi, file, expr.expression, expr.operator.getSource());
+        if (!(expression.realType is BuiltInType && expression.realType.isNumeric)) {
+            CannotPostfixException().send(ixApi, file, expression.expression, expression.operator.source)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
-     * @param expr Prefix expression to type check
+     * @param expression Prefix expression to type check
      * @return Optional containing the type of the prefixed expression
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPrefix(PrefixExpression expr) {
-        return expr.right.accept(this);
+    override fun visitPrefix(expression: PrefixExpression): Optional<IxType> {
+        return expression.right.accept(this)
     }
 
     /**
-     * @param expr Property access expression to type check
+     * @param expression Property access expression to type check
      * @return Optional containing the type of the accessed property
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPropertyAccess(PropertyAccessExpression expr) {
-        var t = expr.expression.accept(this);
+    override fun visitPropertyAccess(expression: PropertyAccessExpression): Optional<IxType> {
+        val t: Optional<IxType> = expression.expression.accept(this)
 
-        var typeChain = new ArrayList<IxType>();
+        val typeChain = ArrayList<IxType?>()
 
-        if (t.isPresent()) {
-            var exprType = t.get();
-            StructType pointer;
-            IxType result = null;
-            if (exprType instanceof MonomorphizedStruct mt) {
-                pointer = mt.getStruct();
-                typeChain.add(pointer);
-                result = pointer;
+        if (t.isPresent) {
+            val exprType = t.get()
+            val pointer: StructType?
+            var result: IxType? = null
+            if (exprType is MonomorphizedStruct) {
+                pointer = exprType.struct
+                typeChain.add(pointer)
+                result = pointer
 
-                result = getTempMSTType(expr, typeChain, pointer, result);
-                if (result instanceof GenericType gt) {
-                    result = mt.getResolved().get(gt.getKey());
+                result = getTempMSTType(expression, typeChain, pointer, result)
+                if (result is GenericType) {
+                    result = exprType.resolved[result.key]
                 }
-            } else if (exprType instanceof StructType st) {
-                pointer = st;
-                typeChain.add(pointer);
-                result = st;
+            } else if (exprType is StructType) {
+                pointer = exprType
+                typeChain.add(pointer)
+                result = exprType
 
-                result = getTempMSTType(expr, typeChain, pointer, result);
+                result = getTempMSTType(expression, typeChain, pointer, result)
             }
-            expr.setRealType(result);
+            expression.realType = result!!
         } else {
-            new MethodNotFoundException().send(ixApi, file, expr.expression, "ree");
+            MethodNotFoundException().send(ixApi, file, expression.expression, "ree")
         }
-        expr.typeChain = typeChain;
+        expression.typeChain = typeChain
 
-        return Optional.ofNullable(expr.getRealType());
+        return Optional.ofNullable(expression.realType)
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitLambda(@NotNull LambdaExpression expression) {
-        return Optional.empty();
+    override fun visitLambda(expression: LambdaExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitEnumAccess(EnumAccessExpression expr) {
-        return Optional.empty();
+    override fun visitEnumAccess(expression: EnumAccessExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * @param statement Return statement to type check
      * @return Empty optional as return statements don't produce values
      */
-    @Override
-    public Optional<IxType> visitReturnStmt(ReturnStatement statement) {
-        var t = statement.expression.accept(this);
+    override fun visitReturnStmt(statement: ReturnStatement): Optional<IxType> {
+        val t: Optional<IxType> = statement.expression!!.accept(this)
 
-        if (t.isPresent()) {
+        if (t.isPresent) {
             if (!functionStack.isEmpty()) {
-                var newType = t.get();
-                var functionType = functionStack.peek();
+                val newType = t.get()
+                val functionType = functionStack.peek()
 
-                if (statement.expression instanceof EmptyListExpression && functionType.getReturnType() instanceof ListType) {
-                    functionType.setHasReturn2(true);
-                    return Optional.empty();
-                }
-
-                if (TypeResolver.typesMatch(functionType.getReturnType(), newType)) {
-                }
-                else if (functionType.getReturnType() instanceof UnionType ut) {
-                    if (!ut.getTypes().contains(newType)) {
-                        new ParameterTypeMismatchException().send(ixApi, file, statement.expression, String.valueOf(newType));
+                when {
+                    statement.expression is EmptyListExpression && functionType.returnType is ListType -> {
+                        functionType.hasReturn2 = true
+                        return Optional.empty()
                     }
-                }
-                else if (functionType.getReturnType() == BuiltInType.VOID) {
-                    if (newType != BuiltInType.VOID) {
-                        new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.getName());
+                    typesMatch(functionType.returnType, newType) -> {}
+                    functionType.returnType is UnionType -> {
+                        if (!(functionType.returnType as UnionType).types.contains(newType)) {
+                            ParameterTypeMismatchException().send(
+                                ixApi,
+                                file,
+                                statement.expression,
+                                String.valueOf(newType)
+                            )
+                        }
                     }
-                }
-                else {
-                    new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.getName());
+                    functionType.returnType === BuiltInType.VOID -> {
+                        if (newType !== BuiltInType.VOID) {
+                            ReturnTypeMismatchException().send(ixApi, file, statement, functionType.name)
+                        }
+                    }
+                    else -> {
+                        ReturnTypeMismatchException().send(ixApi, file, statement, functionType.name)
+                    }
                 }
             }
         }
 
-        functionStack.peek().setHasReturn2(true);;
-        return Optional.empty();
+        functionStack.peek().hasReturn2 = true
+
+        return Optional.empty()
     }
 
     /**
      * @param statement Struct statement to type check
      * @return Empty optional as struct definitions don't produce values
      */
-    @Override
-    public Optional<IxType> visitStruct(StructStatement statement) {
-        var structType = currentContext.getVariableTyped(statement.name.getSource(), StructType.class);
+    override fun visitStruct(statement: StructStatement): Optional<IxType> {
+        val structType = currentContext!!.getVariableTyped<StructType?>(statement.name.source, StructType::class.java as Class<StructType?>)
         if (structType != null) {
-            var parametersAfter = new ArrayList<Pair<String, IxType>>();
-            CollectionUtil.zip(statement.fields, structType.getParameters(), (a, b) -> {
-                var bType = b.getSecond();
-                if (bType instanceof UnknownType ut) {
-                    var attempt = currentContext.getVariable(ut.getTypeName());
-                    if (attempt != null) {
-                        parametersAfter.add(new Pair<>(b.getFirst(), attempt));
-                    } else if (structType.getGenerics().contains(ut.getTypeName())) {
-                        parametersAfter.add(new Pair<>(b.getFirst(), new GenericType(ut.getTypeName())));
+            val parametersAfter = ArrayList<Pair<kotlin.String, IxType>>()
+            zip(
+                statement.fields,
+                structType.parameters,
+                BiConsumer { a: ParameterStatement?, b: Pair<kotlin.String, IxType>? ->
+                    val bType = b!!.second
+                    if (bType is UnknownType) {
+                        val attempt = currentContext!!.getVariable(bType.typeName)
+                        if (attempt != null) {
+                            parametersAfter.add(Pair(b.first, attempt))
+                        } else if (structType.generics.contains(bType.typeName)) {
+                            parametersAfter.add(Pair(b.first, GenericType(bType.typeName)))
+                        } else {
+                            IdentifierNotFoundException().send(ixApi, file, a!!, bType.typeName)
+                            parametersAfter.add(b)
+                        }
                     } else {
-                        new IdentifierNotFoundException().send(ixApi, file, a, ut.getTypeName());
-                        parametersAfter.add(b);
+                        parametersAfter.add(b)
                     }
-                } else {
-                    parametersAfter.add(b);
-                }
-            });
-            structType.getParameters().clear();
-            structType.getParameters().addAll(parametersAfter);
-
+                })
+            structType.parameters.clear()
+            structType.parameters.addAll(parametersAfter)
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
-    @Override
-    public Optional<IxType> visitTypeAlias(TypeStatement statement) {
-        return Optional.empty();
+    override fun visitTypeAlias(statement: TypeStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
-    @Override
-    public Optional<IxType> visitUnionType(UnionTypeStatement statement) {
-        return Optional.empty();
+    override fun visitUnionType(statement: UnionTypeStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * @param statement Variable declaration statement to type check
      * @return Empty optional as variable declarations don't produce values
      */
-    @Override
-    public Optional<IxType> visitVariable(VariableStatement statement) {
+    override fun visitVariable(statement: VariableStatement): Optional<IxType> {
+        val expr = statement.expression
+        val t: Optional<IxType> = expr.accept(this)
 
-        var expr = statement.expression;
-        var t = expr.accept(this);
-
-        if (t.isPresent()) {
-            currentContext.setVariableType(statement.name.getSource(), t.get());
+        if (t.isPresent) {
+            currentContext!!.setVariableType(statement.name.source, t.get())
         } else {
-            new TypeNotResolvedException().send(ixApi, file, expr, statement.name.getSource());
+            TypeNotResolvedException().send(ixApi, file, expr, statement.name.source)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * @param statement While loop statement to type check
      * @return Empty optional as loops don't produce values
      */
-    @Override
-    public Optional<IxType> visitWhile(WhileStatement statement) {
-        var childEnvironment = statement.block.context;
-        childEnvironment.parent = currentContext;
+    override fun visitWhile(statement: WhileStatement): Optional<IxType> {
+        val childEnvironment = statement.block.context
+        childEnvironment.parent = currentContext
 
-        currentContext = childEnvironment;
-        statement.condition.accept(this);
+        currentContext = childEnvironment
+        statement.condition.accept(this)
 
-        statement.block.accept(this);
+        statement.block.accept(this)
 
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
     /**
@@ -741,20 +687,20 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      * @param ut Union type containing potentially unknown types
      * @param node AST node for error reporting
      */
-    private void extractedMethodForUnions(HashSet<IxType> resolvedTypes, UnionType ut, Statement node) {
-        for (var type : ut.getTypes()) {
-            if (type instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.getTypeName());
+    private fun extractedMethodForUnions(resolvedTypes: HashSet<IxType?>, ut: UnionType, node: Statement) {
+        for (type in ut.types) {
+            if (type is UnknownType) {
+                val attempt = currentContext!!.getVariable(type.typeName)
                 if (attempt != null) {
-                    resolvedTypes.add(attempt);
+                    resolvedTypes.add(attempt)
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, node, ukt.getTypeName());
+                    IdentifierNotFoundException().send(ixApi, file, node, type.typeName)
                 }
             } else {
-                resolvedTypes.add(type);
+                resolvedTypes.add(type)
             }
         }
-        ut.setTypes(resolvedTypes);
+        ut.types = resolvedTypes
     }
 
     /**
@@ -765,27 +711,34 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      * @param result Current result type
      * @return Final resolved type after traversing the property chain
      */
-    private IxType getTempMSTType(PropertyAccessExpression expr, ArrayList<IxType> typeChain, StructType pointer, IxType result) {
-        for (IdentifierExpression identifier : expr.identifiers) {
-            var foundField = pointer.getParameters().stream().filter(i -> i.getFirst().equals(identifier.identifier.getSource())).findAny();
-            if (foundField.isPresent()) {
-                var pointerCandidate = foundField.get().getSecond();
-                if (pointerCandidate instanceof StructType pst) {
-                    pointer = pst;
-                    typeChain.add(pointer);
-                    result = pointerCandidate;
+    private fun getTempMSTType(
+        expr: PropertyAccessExpression,
+        typeChain: ArrayList<IxType?>,
+        pointer: StructType,
+        result: IxType?
+    ): IxType? {
+        var pointer = pointer
+        var result = result
+        for (identifier in expr.identifiers) {
+            val foundField: Optional<Pair<kotlin.String, IxType>> = pointer.parameters.stream()
+                .filter(Predicate { i: Pair<kotlin.String, IxType> -> i.first == identifier.identifier.source })
+                .findAny()
+            if (foundField.isPresent) {
+                val pointerCandidate = foundField.get().second
+                if (pointerCandidate is StructType) {
+                    pointer = pointerCandidate
+                    typeChain.add(pointer)
+                    result = pointerCandidate
                 } else {
-                    result = pointerCandidate;
-                    typeChain.add(pointerCandidate);
-
+                    result = pointerCandidate
+                    typeChain.add(pointerCandidate)
                 }
-
             } else {
-                new FieldNotPresentException().send(ixApi, file, identifier, identifier.identifier.getSource());
-                break;
+                FieldNotPresentException().send(ixApi, file, identifier, identifier.identifier.source)
+                break
             }
         }
-        return result;
+        return result
     }
 
     /**
@@ -794,16 +747,16 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      * @param arg Argument expression
      * @param argType Resolved type of the argument
      */
-    private void typecheckCallParameters(Pair<String, IxType> param, Expression arg, IxType argType) {
-        if (argType == BuiltInType.VOID) {
-            new VoidUsageException().send(ixApi, file, arg);
+    private fun typecheckCallParameters(param: Pair<kotlin.String, IxType>, arg: Expression, argType: IxType) {
+        if (argType === BuiltInType.VOID) {
+            VoidUsageException().send(ixApi, file, arg)
         }
-        if (!TypeResolver.typesMatch(param.getSecond(), argType)) {
-            new ParameterTypeMismatchException().send(ixApi, file, arg, argType.getName());
-            TypeResolver.typesMatch(param.getSecond(), argType);
-            arg.accept(this);
+        if (!typesMatch(param.second, argType)) {
+            ParameterTypeMismatchException().send(ixApi, file, arg, argType.name)
+            typesMatch(param.second, argType)
+            arg.accept(this)
         } else {
-            arg.setRealType(argType);
+            arg.realType = argType
         }
     }
 
@@ -812,24 +765,26 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      * @param expr Function call expression
      * @param structType Struct or function type being called
      */
-    private void updateUnknownParameters(CallExpression expr, StructType structType) {
-        var parametersAfter = new ArrayList<Pair<String, IxType>>();
-        CollectionUtil.zip(structType.getParameters(), expr.arguments, (param, arg) -> {
-            if (param.getSecond() instanceof UnknownType ut) {
-                var attempt = currentContext.getVariable(ut.getTypeName());
-                if (attempt != null) {
-                    parametersAfter.add(new Pair<>(param.getFirst(), attempt));
+    private fun updateUnknownParameters(expr: CallExpression, structType: StructType) {
+        val parametersAfter = ArrayList<Pair<kotlin.String, IxType>>()
+        zip(
+            structType.parameters,
+            expr.arguments,
+            BiConsumer { param: Pair<kotlin.String, IxType>, arg: Expression? ->
+                if (param.second is UnknownType) {
+                    val attempt = currentContext!!.getVariable((param.second as UnknownType).typeName)
+                    if (attempt != null) {
+                        parametersAfter.add(Pair(param.first, attempt))
+                    } else {
+                        IdentifierNotFoundException().send(ixApi, file, arg!!, (param.second as UnknownType).typeName)
+                        parametersAfter.add(param)
+                    }
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, arg, ut.getTypeName());
-                    parametersAfter.add(param);
+                    parametersAfter.add(param)
                 }
-            } else {
-                parametersAfter.add(param);
+            })
 
-            }
-        });
-
-        structType.getParameters().clear();
-        structType.getParameters().addAll(parametersAfter);
+        structType.parameters.clear()
+        structType.parameters.addAll(parametersAfter)
     }
 }

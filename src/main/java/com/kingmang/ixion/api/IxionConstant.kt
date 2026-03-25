@@ -1,6 +1,6 @@
 package com.kingmang.ixion.api
 
-import com.kingmang.ixion.runtime.CollectionUtil.IxListWrapper
+import com.kingmang.ixion.runtime.CollectionUtil
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 
@@ -8,7 +8,7 @@ object IxionConstant {
     const val EXT: String = ".ix"
     const val OUT_DIR: String = ".out"
     @JvmStatic
-    val ListWrapperType: Type? = Type.getType(IxListWrapper::class.java)
+    val ListWrapperType: Type? = Type.getType(CollectionUtil.IxListWrapper::class.java)
     @JvmStatic
     val ArrayListType: Type? = Type.getType(ArrayList::class.java)
     @JvmStatic

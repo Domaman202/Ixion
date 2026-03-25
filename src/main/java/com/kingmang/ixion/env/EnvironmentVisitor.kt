@@ -1,38 +1,34 @@
-package com.kingmang.ixion.env;
+package com.kingmang.ixion.env
 
-import com.kingmang.ixion.Visitor;
-import com.kingmang.ixion.api.Context;
-import com.kingmang.ixion.api.IxApi;
-import com.kingmang.ixion.api.IxFile;
-import com.kingmang.ixion.api.IxionConstant;
-import com.kingmang.ixion.ast.*;
-import com.kingmang.ixion.exception.*;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.modules.Modules;
-import com.kingmang.ixion.runtime.*;
-import com.kingmang.ixion.typechecker.TypeUtils;
-import kotlin.Pair;
-import org.jetbrains.annotations.NotNull;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import com.kingmang.ixion.Visitor
+import com.kingmang.ixion.api.Context
+import com.kingmang.ixion.api.IxApi
+import com.kingmang.ixion.api.IxApi.Companion.exit
+import com.kingmang.ixion.api.IxFile
+import com.kingmang.ixion.api.IxionConstant.Mutability
+import com.kingmang.ixion.ast.*
+import com.kingmang.ixion.exception.*
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.lexer.TokenType.Companion.isKeyword
+import com.kingmang.ixion.modules.Modules.getExports
+import com.kingmang.ixion.modules.Modules.modules
+import com.kingmang.ixion.runtime.*
+import com.kingmang.ixion.typechecker.TypeUtils
+import com.kingmang.ixion.typechecker.TypeUtils.getFromToken
+import java.io.File
+import java.util.*
+import java.util.function.Supplier
+import java.util.stream.Collectors
 
 /**
  * Visitor for building the symbol table and type environment during compilation
  * Traverses the AST and registers variables, functions, types in appropriate scopes
  */
-public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
-
-    public final Context rootContext;
-    public final IxFile source;
-    public final IxApi ixApi;
-    final File file;
-    public Context currentContext;
+class EnvironmentVisitor(ixApi: IxApi?, val rootContext: Context?, val source: IxFile) : Visitor<Optional<IxType>> {
+    val ixApi: IxApi?
+    val file: File
+    var currentContext: Context?
 
     /**
      * Constructs a new EnvironmentVisitor
@@ -40,22 +36,19 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param rootContext The root context/scope for the compilation unit
      * @param source The source file being processed
      */
-    public EnvironmentVisitor(IxApi ixApi, Context rootContext, IxFile source) {
-        this.rootContext = rootContext;
-        this.source = source;
-        this.file = source.file;
-        this.currentContext = this.rootContext;
-        this.ixApi = ixApi;
+    init {
+        this.file = source.file
+        this.currentContext = this.rootContext
+        this.ixApi = ixApi
     }
 
     /**
      * Generic visit method that delegates to specific AST node handlers
-     * @param stmt The statement to visit
+     * @param statement The statement to visit
      * @return Optional containing the type if applicable, empty otherwise
      */
-    @Override
-    public Optional<IxType> visit(Statement stmt) {
-        return stmt.accept(this);
+    override fun visit(statement: Statement): Optional<IxType> {
+        return statement.accept(this)
     }
 
     /**
@@ -63,61 +56,58 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The type alias statement
      * @return Empty optional as type aliases don't produce values
      */
-    @Override
-    public Optional<IxType> visitTypeAlias(TypeAliasStatement statement) {
-        var type = statement.typeStmt.accept(this);
-        currentContext.addVariable(statement.identifier.getSource(), type.orElseThrow());
-        return Optional.empty();
+    override fun visitTypeAlias(statement: TypeAliasStatement): Optional<IxType> {
+        val type: Optional<IxType> = statement.typeStmt.accept(this)!!
+        currentContext!!.addVariable(statement.identifier.source, type.orElseThrow())
+        return Optional.empty()
     }
 
     /**
      * Visits an assignment expression and checks mutability constraints
-     * @param expr The assignment expression
+     * @param expression The assignment expression
      * @return Empty optional as assignments don't produce types in environment phase
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitAssignExpr(AssignExpression expr) {
-        expr.left.accept(this);
-        expr.right.accept(this);
+    override fun visitAssignExpr(expression: AssignExpression): Optional<IxType> {
+        expression.left.accept(this)
+        expression.right.accept(this)
 
-        if (expr.left instanceof IdentifierExpression identifier) {
-            var mut = currentContext.getVariableMutability(identifier.identifier.getSource());
-            if (mut == IxionConstant.Mutability.IMMUTABLE) {
-                new MutabilityException().send(ixApi, file, identifier, identifier.identifier.getSource());
+        if (expression.left is IdentifierExpression) {
+            val mut = currentContext!!.getVariableMutability(expression.left.identifier.source)
+            if (mut == Mutability.IMMUTABLE) {
+                MutabilityException().send(ixApi, file, expression.left, expression.left.identifier.source)
             }
-
-        } else if (expr.left instanceof PropertyAccessExpression pa) {
+        } else if (expression.left is PropertyAccessExpression) {
             // Property assignment - handled in type checking phase
         } else {
-            new ImplementationException().send(ixApi, file, expr, "Assignment not implemented for any recipient but identifier yet");
+            ImplementationException().send(
+                ixApi,
+                file,
+                expression,
+                "Assignment not implemented for any recipient but identifier yet"
+            )
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Visits a malformed expression node
-     * @param expr The bad expression
+     * @param expression The bad expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitBad(BadExpression expr) {
-        return Optional.empty();
+    override fun visitBad(expression: BadExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * Visits a binary expression and processes both operands
-     * @param expr The binary expression
+     * @param expression The binary expression
      * @return Empty optional as binary expressions are type-checked later
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitBinaryExpr(BinaryExpression expr) {
-        expr.left.accept(this);
-        expr.right.accept(this);
-        return Optional.empty();
+    override fun visitBinaryExpr(expression: BinaryExpression): Optional<IxType> {
+        expression.left.accept(this)
+        expression.right.accept(this)
+        return Optional.empty()
     }
 
     /**
@@ -126,58 +116,51 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The block statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitBlockStmt(BlockStatement statement) {
-        boolean returned = false;
-        for (var stmt : statement.statements) {
-            stmt.accept(this);
+    override fun visitBlockStmt(statement: BlockStatement): Optional<IxType> {
+        var returned = false
+        for (stmt in statement.statements) {
+            stmt!!.accept(this)
             if (!returned) {
-                if (stmt instanceof ReturnStatement) returned = true;
+                if (stmt is ReturnStatement) returned = true
             } else {
-                new UnreachableException().send(ixApi, file, stmt);
+                UnreachableException().send(ixApi, file, stmt)
             }
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Visits a function call expression and processes the callee and arguments
-     * @param expr The call expression
+     * @param expression The call expression
      * @return Empty optional as function calls are type-checked later
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitCall(CallExpression expr) {
-        expr.item.accept(this);
-        for (var arg : expr.arguments) {
-            arg.accept(this);
+    override fun visitCall(expression: CallExpression): Optional<IxType> {
+        expression.item.accept(this)
+        for (arg in expression.arguments) {
+            arg.accept(this)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Visits an empty expression
-     * @param empty The empty expression
+     * @param expression The empty expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitEmpty(EmptyExpression empty) {
-        return Optional.empty();
+    override fun visitEmpty(expression: EmptyExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * Visits an empty list expression and determines its type
-     * @param emptyList The empty list expression
+     * @param expression The empty list expression
      * @return Optional containing the list type
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitEmptyList(EmptyListExpression emptyList) {
-        var bt = TypeUtils.INSTANCE.getFromString(emptyList.tokenType.getSource());
-        var lt = new ListType(bt);
-        emptyList.setRealType(lt);
-        return Optional.of(lt);
+    override fun visitEmptyList(expression: EmptyListExpression): Optional<IxType> {
+        val bt = TypeUtils.getFromString(expression.tokenType.source!!)
+        val lt = ListType(bt!!)
+        expression.realType = lt
+        return Optional.of(lt)
     }
 
     /**
@@ -185,9 +168,8 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The enum statement
      * @return Empty optional as enums are processed differently
      */
-    @Override
-    public Optional<IxType> visitEnum(EnumStatement statement) {
-        return Optional.empty();
+    override fun visitEnum(statement: EnumStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
@@ -195,10 +177,9 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The export statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitExport(ExportStatement statement) {
-        statement.stmt.accept(this);
-        return Optional.empty();
+    override fun visitExport(statement: ExportStatement): Optional<IxType> {
+        statement.stmt.accept(this)
+        return Optional.empty()
     }
 
     /**
@@ -206,9 +187,8 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The expression statement
      * @return The result of visiting the expression
      */
-    @Override
-    public Optional<IxType> visitExpressionStmt(ExpressionStatement statement) {
-        return statement.expression.accept(this);
+    override fun visitExpressionStmt(statement: ExpressionStatement): Optional<IxType> {
+        return statement.expression.accept(this)
     }
 
     /**
@@ -216,22 +196,21 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The for statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitFor(ForStatement statement) {
-        var childEnvironment = statement.block.context;
-        childEnvironment.parent = currentContext;
+    override fun visitFor(statement: ForStatement): Optional<IxType> {
+        val childEnvironment = statement.block.context
+        childEnvironment.parent = currentContext
 
-        currentContext = childEnvironment;
+        currentContext = childEnvironment
 
-        statement.expression.accept(this);
+        statement.expression.accept(this)
 
-        currentContext.addVariable(statement.name.getSource(), new UnknownType());
+        currentContext!!.addVariable(statement.name.source, UnknownType())
 
-        statement.block.accept(this);
+        statement.block.accept(this)
 
-        currentContext = currentContext.parent;
+        currentContext = currentContext!!.parent
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
@@ -240,69 +219,63 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The function statement
      * @return Optional containing the function type definition
      */
-    @Override
-    public Optional<IxType> visitFunctionStmt(DefStatement statement) {
-        String name = statement.name.getSource();
-        List<String> generics = statement.generics.stream().map(Token::getSource).toList();
+    override fun visitFunctionStmt(statement: DefStatement): Optional<IxType> {
+        val name = statement.name.source
+        val generics = statement.generics!!.stream().map { it.source!! }.toList()
 
-        var childEnvironment = statement.body.context;
-        childEnvironment.parent = currentContext;
+        val childEnvironment = statement.body!!.context
+        childEnvironment.parent = currentContext
 
         // Annotate parameters in the current scope
-        List<Pair<String, IxType>> parameters = new ArrayList<>();
-        for (var param : statement.parameters) {
-            var pt = param.type.accept(this);
-            if (pt.isPresent()) {
-                IxType t = pt.get();
-                if (t instanceof UnknownType ut && generics.contains(ut.getTypeName())) {
-                    var gt = new GenericType(ut.getTypeName());
-                    parameters.add(new Pair<>(param.name.getSource(), gt));
-                    childEnvironment.addVariable(param.name.getSource(), gt);
-
+        val parameters: MutableList<Pair<String, IxType>> = ArrayList()
+        for (param in statement.parameters!!) {
+            val pt: Optional<IxType> = param.type!!.accept(this)
+            if (pt.isPresent) {
+                val t = pt.get()
+                if (t is UnknownType && generics.contains(t.typeName)) {
+                    val gt = GenericType(t.typeName)
+                    parameters.add(Pair(param.name.source!!, gt))
+                    childEnvironment.addVariable(param.name.source, gt)
                 } else {
-                    childEnvironment.addVariable(param.name.getSource(), t);
-                    parameters.add(new Pair<>(param.name.getSource(), t));
+                    childEnvironment.addVariable(param.name.source, t)
+                    parameters.add(Pair(param.name.source!!, t))
                 }
             } else {
-                IxApi.exit("pt not present", 783);
+                exit("pt not present", 783)
             }
         }
 
-        var funcType = new DefType(name, parameters, generics);
+        val funcType = DefType(name!!, parameters, generics)
         if (statement.returnType != null) {
-            var ttt = statement.returnType.accept(this);
-            funcType.setReturnType(ttt.get());
+            val ttt: Optional<IxType> = statement.returnType.accept(this)
+            funcType.returnType = ttt.get()
         }
-        currentContext.addVariableOrError(ixApi, name, funcType, file, statement);
+        currentContext!!.addVariableOrError(ixApi, name, funcType, file, statement)
 
-        currentContext = childEnvironment;
-        statement.body.accept(this);
+        currentContext = childEnvironment
+        statement.body.accept(this)
 
-        currentContext = currentContext.parent;
-        return Optional.of(funcType);
+        currentContext = currentContext!!.parent
+        return Optional.of(funcType)
     }
 
     /**
      * Visits a grouping expression (parentheses) and processes the inner expression
-     * @param expr The grouping expression
+     * @param expression The grouping expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitGroupingExpr(GroupingExpression expr) {
-        expr.expression.accept(this);
-        return Optional.empty();
+    override fun visitGroupingExpr(expression: GroupingExpression): Optional<IxType> {
+        expression.expression.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Visits an identifier expression and looks up the variable in the current context
-     * @param expr The identifier expression
+     * @param expression The identifier expression
      * @return Optional containing the variable's type if found
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitIdentifierExpr(IdentifierExpression expr) {
-        return Optional.ofNullable(currentContext.getVariable(expr.identifier.getSource()));
+    override fun visitIdentifierExpr(expression: IdentifierExpression): Optional<IxType> {
+        return Optional.ofNullable(currentContext!!.getVariable(expression.identifier.source))
     }
 
     /**
@@ -310,17 +283,16 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The if statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitIf(IfStatement statement) {
-        var childEnvironment = statement.trueBlock.context;
-        childEnvironment.parent = currentContext;
-        currentContext = childEnvironment;
-        statement.condition.accept(this);
-        statement.trueBlock.accept(this);
-        if (statement.falseStatement != null) statement.falseStatement.accept(this);
+    override fun visitIf(statement: IfStatement): Optional<IxType> {
+        val childEnvironment = statement.trueBlock.context
+        childEnvironment.parent = currentContext
+        currentContext = childEnvironment
+        statement.condition.accept(this)
+        statement.trueBlock.accept(this)
+        statement.falseStatement?.accept(this)
 
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 
     /**
@@ -328,18 +300,17 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The use statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitUse(UseStatement statement) {
-        String requestedImport = statement.stringLiteral.getSource();
-        if (Modules.INSTANCE.getModules().containsKey(requestedImport)) {
-            var ree = Modules.INSTANCE.getExports(requestedImport);
-            for (var ft : ree) {
-                var typeName = ft.getName();
-                this.currentContext.addVariableOrError(ixApi, typeName, ft, file, statement);
+    override fun visitUse(statement: UseStatement): Optional<IxType> {
+        val requestedImport = statement.stringLiteral.source
+        if (modules.containsKey(requestedImport)) {
+            val ree = getExports(requestedImport)
+            for (ft in ree) {
+                val typeName = ft!!.name
+                this.currentContext!!.addVariableOrError(ixApi, typeName, ft, file, statement)
             }
         }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
@@ -347,45 +318,35 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param expr The index access expression
      * @return Empty optional (handled in type checking phase)
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitIndexAccess(IndexAccessExpression expr) {
-        return Optional.empty();
+    override fun visitIndexAccess(expr: IndexAccessExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * Visits a literal expression and determines its built-in type
-     * @param expr The literal expression
+     * @param expression The literal expression
      * @return Optional containing the literal's type
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitLiteralExpr(LiteralExpression expr) {
-        var t = TypeUtils.INSTANCE.getFromToken(expr.literal.getType());
-        if (t == null) {
-            new ImplementationException().send(ixApi, file, expr, "This should never happen. All literals should be builtin, for now.");
-        } else {
-            expr.setRealType(t);
-        }
-        return Optional.ofNullable(t);
+    override fun visitLiteralExpr(expression: LiteralExpression): Optional<IxType> {
+        val t = getFromToken(expression.literal.type)
+        expression.realType = t
+        return Optional.ofNullable(t)
     }
 
     /**
      * Visits a list literal expression and processes all entries
-     * @param expr The list literal expression
+     * @param expression The list literal expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitLiteralList(LiteralListExpression expr) {
-        if (expr.entries.isEmpty()) {
-            new ListLiteralIncompleteException().send(ixApi, file, expr);
+    override fun visitLiteralList(expression: LiteralListExpression): Optional<IxType> {
+        if (expression.entries.isEmpty()) {
+            ListLiteralIncompleteException().send(ixApi, file, expression)
         }
 
-        for (var entry : expr.entries) {
-            entry.accept(this);
+        for (entry in expression.entries) {
+            entry.accept(this)
         }
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
@@ -393,43 +354,40 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The match statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitMatch(CaseStatement statement) {
-        statement.expression.accept(this);
-        statement.cases.forEach((keyType, pair) -> {
-            String id = pair.getValue0();
-            BlockStatement block = pair.getValue1();
-            keyType.accept(this);
+    override fun visitMatch(statement: CaseStatement): Optional<IxType> {
+        statement.expression.accept(this)
+        statement.cases.forEach { (keyType: TypeStatement?, pair: Pair<String, BlockStatement>) ->
+            val id: String = pair.first
+            val block: BlockStatement = pair.second
+            keyType!!.accept(this)
+
             // create environment for case
-
-            var pt = keyType.accept(this);
-            if (pt.isPresent()) {
-                IxType t = pt.get();
-                statement.types.put(keyType, t);
+            val pt: Optional<IxType> = keyType.accept(this)
+            if (pt.isPresent) {
+                val t = pt.get()
+                statement.types[keyType] = t
             } else {
-                IxApi.exit("pt not present", 783);
+                exit("pt not present", 783)
             }
-            var childEnvironment = block.context;
-            childEnvironment.parent = currentContext;
-            childEnvironment.addVariable(id, statement.types.get(keyType));
-            currentContext = childEnvironment;
-            block.accept(this);
-            currentContext = currentContext.parent;
-        });
+            val childEnvironment = block.context
+            childEnvironment.parent = currentContext
+            childEnvironment.addVariable(id, statement.types[keyType])
+            currentContext = childEnvironment
+            block.accept(this)
+            currentContext = currentContext!!.parent
+        }
 
-        return Optional.empty();
+        return Optional.empty()
     }
 
     /**
      * Visits a module access expression (qualified name access)
-     * @param expr The module access expression
+     * @param expression The module access expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitModuleAccess(ModuleAccessExpression expr) {
-        expr.foreign.accept(this);
-        return Optional.empty();
+    override fun visitModuleAccess(expression: ModuleAccessExpression): Optional<IxType> {
+        expression.foreign.accept(this)
+        return Optional.empty()
     }
 
     /**
@@ -437,57 +395,46 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The parameter statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitParameterStmt(ParameterStatement statement) {
-        return Optional.empty();
+    override fun visitParameterStmt(statement: ParameterStatement): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
      * Visits a postfix expression (increment/decrement operators)
-     * @param expr The postfix expression
+     * @param expression The postfix expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPostfixExpr(PostfixExpression expr) {
-        expr.expression.accept(this);
-        return Optional.empty();
+    override fun visitPostfixExpr(expression: PostfixExpression): Optional<IxType> {
+        expression.expression.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Visits a prefix expression (unary operators)
-     * @param expr The prefix expression
+     * @param expression The prefix expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPrefix(PrefixExpression expr) {
-        expr.right.accept(this);
-        return Optional.empty();
+    override fun visitPrefix(expression: PrefixExpression): Optional<IxType> {
+        expression.right.accept(this)
+        return Optional.empty()
     }
 
     /**
      * Visits a property access expression (dot notation)
-     * @param expr The property access expression
+     * @param expression The property access expression
      * @return Empty optional
      */
-    @NotNull
-    @Override
-    public Optional<IxType> visitPropertyAccess(PropertyAccessExpression expr) {
-        expr.expression.accept(this);
-        return Optional.empty();
+    override fun visitPropertyAccess(expression: PropertyAccessExpression): Optional<IxType> {
+        expression.expression.accept(this)
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitLambda(@NotNull LambdaExpression expression) {
-        return Optional.empty();
+    override fun visitLambda(expression: LambdaExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
-    @NotNull
-    @Override
-    public Optional<IxType> visitEnumAccess(EnumAccessExpression expr) {
-        return Optional.empty();
+    override fun visitEnumAccess(expression: EnumAccessExpression): Optional<IxType> {
+        return Optional.empty()
     }
 
     /**
@@ -495,10 +442,9 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The return statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitReturnStmt(ReturnStatement statement) {
-        statement.expression.accept(this);
-        return Optional.empty();
+    override fun visitReturnStmt(statement: ReturnStatement): Optional<IxType> {
+        statement.expression!!.accept(this)
+        return Optional.empty()
     }
 
     /**
@@ -507,35 +453,34 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The struct statement
      * @return Optional containing the struct type definition
      */
-    @Override
-    public Optional<IxType> visitStruct(StructStatement statement) {
-        var fieldNames = new String[statement.fields.size()];
-        var fieldTypes = new IxType[statement.fields.size()];
+    override fun visitStruct(statement: StructStatement): Optional<IxType> {
+        val fieldNames = arrayOfNulls<String>(statement.fields.size)
+        val fieldTypes = arrayOfNulls<IxType>(statement.fields.size)
 
-        List<Pair<String, IxType>> parameters = new ArrayList<>();
-        for (int i = 0; i < fieldNames.length; i++) {
-            var field = statement.fields.get(i);
-            fieldNames[i] = field.name.getSource();
-            if (TokenType.Companion.isKeyword(fieldNames[i])) {
-                new ReservedWordException().send(ixApi, file, statement.fields.get(i), fieldNames[i]);
+        val parameters: MutableList<Pair<String, IxType>> = ArrayList()
+        for (i in fieldNames.indices) {
+            val field = statement.fields[i]
+            fieldNames[i] = field.name.source
+            if (isKeyword(fieldNames[i])) {
+                ReservedWordException().send(ixApi, file, statement.fields[i], fieldNames[i])
             }
-            var fieldT = field.type.accept(this);
-            if (fieldT.isPresent()) {
-                fieldTypes[i] = fieldT.get();
-                parameters.add(new Pair<>(fieldNames[i], fieldTypes[i]));
+            val fieldT: Optional<IxType> = field.type!!.accept(this)
+            if (fieldT.isPresent) {
+                fieldTypes[i] = fieldT.get()
+                parameters.add(Pair(fieldNames[i]!!, fieldTypes[i]!!))
             } else {
-                IxApi.exit("fieldT not present", 429);
+                exit("fieldT not present", 429)
             }
         }
-        String name = statement.name.getSource();
-        List<String> generics = statement.generics.stream().map(Token::getSource).collect(Collectors.toList());
+        val name = statement.name.source
+        val generics = statement.generics!!.stream().map { it.source!! }.toList()
 
-        StructType structType = new StructType(name, parameters, generics);
-        structType.setQualifiedName(source.getFullRelativePath() + "$" + name);
-        structType.setParentName(source.getFullRelativePath());
-        currentContext.addVariableOrError(ixApi, name, structType, file, statement);
+        val structType = StructType(name!!, parameters, generics)
+        structType.qualifiedName = source.fullRelativePath + "$" + name
+        structType.parentName = source.fullRelativePath
+        currentContext!!.addVariableOrError(ixApi, name, structType, file, statement)
 
-        return Optional.of(structType);
+        return Optional.of(structType)
     }
 
     /**
@@ -544,29 +489,27 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The type statement
      * @return Optional containing the resolved type
      */
-    @Override
-    public Optional<IxType> visitTypeAlias(TypeStatement statement) {
-        IxType type;
-        if (statement.next.isEmpty()) {
-            var bt = TypeUtils.INSTANCE.getFromString(statement.identifier.getSource());
-            type = Objects.requireNonNullElseGet(bt, () -> new UnknownType(statement.identifier.getSource()));
+    override fun visitTypeAlias(statement: TypeStatement): Optional<IxType> {
+        var type: IxType?
+        if (statement.next.isEmpty) {
+            val bt = TypeUtils.getFromString(statement.identifier!!.source!!)
+            type = Objects.requireNonNullElseGet(bt, Supplier { UnknownType(statement.identifier.source) })
             if (statement.listType) {
-                type = new ListType(type);
+                type = ListType(type!!)
             }
-        }
-        else {
-            StringBuilder path = new StringBuilder(statement.identifier.getSource());
-            var ptr = statement.next;
-            while (ptr.isPresent()) {
-                path.append(".").append(ptr.get().identifier.getSource());
-                ptr = ptr.get().next;
+        } else {
+            val path = StringBuilder(statement.identifier!!.source)
+            var ptr: Optional<TypeStatement> = statement.next
+            while (ptr.isPresent) {
+                path.append(".").append(ptr.get().identifier!!.source)
+                ptr = ptr.get().next
             }
             type = Objects.requireNonNullElse(
-                    currentContext.getVariableTyped(path.toString(), StructType.class),
-                    new UnknownType(path.toString())
-            );
+                currentContext!!.getVariableTyped<StructType?>(path.toString(), StructType::class.java as Class<StructType?>),
+                UnknownType(path.toString())
+            )
         }
-        return Optional.of(type);
+        return Optional.of(type!!)
     }
 
     /**
@@ -574,13 +517,13 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The union type statement
      * @return Optional containing the union type definition
      */
-    @Override
-    public Optional<IxType> visitUnionType(UnionTypeStatement statement) {
-        var union = new UnionType(statement.types.stream()
-                .map(type -> type.accept(this).orElseThrow())
+    override fun visitUnionType(statement: UnionTypeStatement): Optional<IxType> {
+        val union = UnionType(
+            statement.types.stream()
+                .map<IxType?> { type: TypeStatement? -> type!!.accept(this).orElseThrow() }
                 .collect(Collectors.toSet())
-        );
-        return Optional.of(union);
+        )
+        return Optional.of(union)
     }
 
     /**
@@ -589,21 +532,18 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The variable statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitVariable(VariableStatement statement) {
-        var t = statement.expression.accept(this);
+    override fun visitVariable(statement: VariableStatement): Optional<IxType> {
+        val t: Optional<IxType> = statement.expression.accept(this)
+        val type: IxType? = t.orElseGet(Supplier { UnknownType() })
 
-        IxType type;
-        type = t.orElseGet(UnknownType::new);
-
-        var mut = IxionConstant.Mutability.IMMUTABLE;
-        if (statement.mutability.getType() == TokenType.VARIABLE) {
-            mut = IxionConstant.Mutability.MUTABLE;
+        var mut = Mutability.IMMUTABLE
+        if (statement.mutability.type == TokenType.VARIABLE) {
+            mut = Mutability.MUTABLE
         }
 
-        currentContext.addVariableOrError(ixApi, statement.name.getSource(), type, file, statement);
-        currentContext.setVariableMutability(statement.name.getSource(), mut);
-        return Optional.empty();
+        currentContext!!.addVariableOrError(ixApi, statement.name.source, type, file, statement)
+        currentContext!!.setVariableMutability(statement.name.source, mut)
+        return Optional.empty()
     }
 
     /**
@@ -611,17 +551,16 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      * @param statement The while statement
      * @return Empty optional
      */
-    @Override
-    public Optional<IxType> visitWhile(WhileStatement statement) {
-        var childEnvironment = statement.block.context;
-        childEnvironment.parent = currentContext;
+    override fun visitWhile(statement: WhileStatement): Optional<IxType> {
+        val childEnvironment = statement.block.context
+        childEnvironment.parent = currentContext
 
-        currentContext = childEnvironment;
-        statement.condition.accept(this);
+        currentContext = childEnvironment
+        statement.condition.accept(this)
 
-        statement.block.accept(this);
+        statement.block.accept(this)
 
-        currentContext = currentContext.parent;
-        return Optional.empty();
+        currentContext = currentContext!!.parent
+        return Optional.empty()
     }
 }

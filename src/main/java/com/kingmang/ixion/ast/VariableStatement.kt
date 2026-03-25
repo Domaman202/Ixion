@@ -8,15 +8,15 @@ import java.util.*
 
 class VariableStatement(
     pos: Position?,
-    @JvmField val mutability: Token?,
-    @JvmField val name: Token,
-    @JvmField val expression: Expression?,
-    val type: Optional<TypeStatement?>?
+    val mutability: Token,
+    val name: Token,
+    val expression: Expression,
+    val type: Optional<TypeStatement>
 ) : Statement(pos), PublicAccess {
     var localIndex: Int = -1
 
-    override fun <R> accept(visitor: StatementVisitor<R?>?): R? {
-        return visitor?.visitVariable(this)
+    override fun <R> accept(visitor: StatementVisitor<R>): R {
+        return visitor.visitVariable(this)
     }
 
     override fun identifier(): String? {

@@ -7,18 +7,20 @@ import com.kingmang.ixion.lexer.Token
 import com.kingmang.ixion.lexer.TokenType
 import java.util.*
 
-class UseStatement(pos: Position?, @JvmField val stringLiteral: Token?, val identifier: Optional<Token?>?) : Statement(pos),
-    TopLevel {
+class UseStatement(
+    pos: Position?,
+    val stringLiteral: Token,
+    val identifier: Optional<Token>) : Statement(pos), TopLevel {
 
-    override fun <R> accept(visitor: StatementVisitor<R?>?): R? {
-        return visitor?.visitUse(this)
+    override fun <R> accept(visitor: StatementVisitor<R>): R {
+        return visitor.visitUse(this)
     }
 
     companion object {
         val instance: UseStatement = UseStatement(
             Position(0, 0),
             Token(TokenType.STRING, 0, 0, "prelude"),
-            Optional.empty<Token?>() as Optional<Token?>?
+            Optional.empty()
         )
     }
 }
