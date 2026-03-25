@@ -7,13 +7,12 @@ import com.kingmang.ixion.lexer.Token
 
 class StructStatement(
     pos: Position?,
-    @JvmField val name: Token,
-    @JvmField val fields: MutableList<ParameterStatement?>?,
-    @JvmField val generics: MutableList<Token?>?
+    val name: Token,
+    val fields: MutableList<ParameterStatement>,
+     val generics: MutableList<Token>?
 ) : Statement(pos), PublicAccess {
-
-    override fun <R> accept(visitor: StatementVisitor<R?>?): R? {
-        return visitor?.visitStruct(this)
+    override fun <R> accept(visitor: StatementVisitor<R>): R {
+        return visitor.visitStruct(this)
     }
 
     override fun identifier(): String? {

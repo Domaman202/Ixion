@@ -2,49 +2,36 @@ package com.kingmang.ixion.runtime
 
 import org.objectweb.asm.Opcodes
 
-@JvmRecord
-data class ExternalType(@JvmField val foundClass: Class<*>?) : IxType {
-    override fun getDefaultValue(): Any? {
-        return null
-    }
+data class ExternalType(val foundClass: Class<*>?) : IxType {
+    override val defaultValue: Any?
+        get() = null
 
-    override fun getDescriptor(): String {
-        return foundClass!!.descriptorString()
-    }
+    override val descriptor: String?
+        get() = foundClass!!.descriptorString()
 
+    override val internalName: String
+        get() = name.replace(".", "/")
 
-    override fun getInternalName(): String {
-        return getName().replace(".", "/")
-    }
+    override val loadVariableOpcode: Int
+        get() = Opcodes.ALOAD
 
-    override fun getLoadVariableOpcode(): Int {
-        return Opcodes.ALOAD
-    }
+    override val name: String
+        get() = foundClass!!.getName()
 
+    override val returnOpcode: Int
+        get() = Opcodes.ARETURN
 
-    override fun getName(): String {
-        return foundClass!!.getName()
-    }
+    override val typeClass: Class<*>?
+        get() = foundClass
 
-
-    override fun getReturnOpcode(): Int {
-        return Opcodes.ARETURN
-    }
-
-
-    override fun getTypeClass(): Class<*>? {
-        return foundClass
-    }
-
-    override fun isNumeric(): Boolean {
-        return false
-    }
+    override val isNumeric: Boolean
+        get() = false
 
     override fun kind(): String? {
         return null
     }
 
     override fun toString(): String {
-        return getName()
+        return name
     }
 }

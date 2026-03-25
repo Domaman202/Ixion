@@ -43,12 +43,10 @@ class IxFile(projectRoot: String, relativePath: String, name: String?) {
         this.statements = parser.parse()
     }
 
-    fun <R> acceptVisitor(visitor: Visitor<out R?>?): MutableList<R?> {
-        val results: MutableList<R?> = ArrayList<R?>()
-        for (s in this.statements) {
-            val r: R? = s.accept(visitor)
-            results.add(r)
-        }
+    fun <R> acceptVisitor(visitor: Visitor<out R>): MutableList<R> {
+        val results: MutableList<R> = ArrayList()
+        for (s in this.statements)
+            results.add(s.accept(visitor))
         return results
     }
 

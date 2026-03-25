@@ -19,7 +19,7 @@ class Context {
         mutability[name] = Mutability.IMMUTABLE
     }
 
-    fun addVariableOrError(ixApi: IxApi?, name: String?, type: IxType?, file: File?, node: Node) {
+    fun addVariableOrError(ixApi: IxApi?, name: String?, type: IxType?, file: File, node: Node) {
         if (getVariable(name) != null) {
             RedeclarationException().send(ixApi, file, node, name)
         } else {
@@ -28,30 +28,25 @@ class Context {
     }
 
     fun getVariable(name: String?): IxType? {
-        if (variables.get(name) != null) {
-            return variables.get(name)
+        return when {
+            variables[name] != null -> variables[name]
+            parent != null -> parent!!.getVariable(name)
+            else -> null
         }
-        if (parent != null) {
-            return parent!!.getVariable(name)
-        }
-        return null
     }
 
     fun getVariableMutability(name: String?): Mutability? {
-        if (mutability.get(name) != null) {
-            return mutability.get(name)
+        return when {
+            mutability[name] != null -> mutability[name]
+            parent != null -> parent!!.getVariableMutability(name)
+            else -> null
         }
-        if (parent != null) {
-            return parent!!.getVariableMutability(name)
-        }
-        return null
     }
 
     fun <T> getVariableTyped(name: String?, clazz: Class<T?>): T? {
         val v = getVariable(name)
-        if (clazz.isInstance(v)) {
+        if (clazz.isInstance(v))
             return v as T
-        }
         return null
     }
 

@@ -6,11 +6,10 @@ import com.kingmang.ixion.runtime.IxType
 
 class PropertyAccessExpression(
     pos: Position?,
-    @JvmField val expression: Expression?,
-    @JvmField val identifiers: MutableList<IdentifierExpression?>?
+    val expression: Expression,
+    val identifiers: MutableList<IdentifierExpression>
 ) : Expression(pos) {
-    @JvmField
-    var typeChain: MutableList<IxType?> = ArrayList<IxType?>()
+    var typeChain: MutableList<IxType?> = ArrayList()
 
     override fun <R> accept(visitor: ExprVisitor<R>): R {
         return visitor.visitPropertyAccess(this)

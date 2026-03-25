@@ -7,11 +7,9 @@ import com.kingmang.ixion.runtime.IxType
 import com.kingmang.ixion.runtime.UnknownType
 
 abstract class Expression(
-    val pos: Position?
+    override val position: Position?
 ) : Node {
     var realType: IxType = UnknownType("unknown")
 
     abstract fun <R> accept(visitor: ExprVisitor<R>): R
-
-    override fun pos(): Position? = pos
 }

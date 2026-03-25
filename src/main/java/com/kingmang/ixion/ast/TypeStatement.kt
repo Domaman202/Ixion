@@ -8,13 +8,12 @@ import java.util.*
 
 open class TypeStatement(
     pos: Position?,
-    @JvmField val identifier: Token?,
-    @JvmField val next: Optional<TypeStatement?>?,
-    @JvmField val listType: Boolean
+    val identifier: Token?,
+    val next: Optional<TypeStatement>,
+    val listType: Boolean
 ) : Statement(pos) {
-
-    override fun <R> accept(visitor: StatementVisitor<R?>?): R? {
-        return visitor?.visitTypeAlias(this)
+    override fun <R> accept(visitor: StatementVisitor<R>): R {
+        return visitor.visitTypeAlias(this)
     }
 
     companion object {
@@ -22,7 +21,7 @@ open class TypeStatement(
             return TypeStatement(
                 loc,
                 Token(TokenType.TYPEALIAS, loc.line, loc.col, "void"),
-                Optional.empty<TypeStatement?>() as Optional<TypeStatement?>?,
+                Optional.empty<TypeStatement>(),
                 false
             )
         }
