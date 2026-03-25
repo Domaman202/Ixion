@@ -82,22 +82,9 @@ public class TypeResolver {
     }
 
     private static IxType getContentType(IxType type) {
-        if (type instanceof ListType listType) {
-            return listType.contentType();
+        if (type instanceof ListType(IxType contentType)) {
+            return contentType;
         }
         return BuiltInType.ANY;
-    }
-
-    public static boolean isNumericCompatible(IxType from, IxType to) {
-        if (!(from instanceof BuiltInType fromType) || !(to instanceof BuiltInType toType)) {
-            return false;
-        }
-
-        return switch (fromType) {
-            case INT -> toType == BuiltInType.INT || toType == BuiltInType.FLOAT || toType == BuiltInType.DOUBLE;
-            case FLOAT -> toType == BuiltInType.FLOAT || toType == BuiltInType.DOUBLE;
-            case DOUBLE -> toType == BuiltInType.DOUBLE;
-            default -> false;
-        };
     }
 }
