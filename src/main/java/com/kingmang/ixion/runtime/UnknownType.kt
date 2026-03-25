@@ -1,75 +1,54 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Opcodes
+import java.io.Serializable
 
-import java.io.Serializable;
+class UnknownType : IxType, Serializable {
+	val typeName: String
 
-public class UnknownType implements IxType, Serializable {
-	static int counter = 1;
-	public final String typeName;
+    constructor(typeName: String) {
+        this.typeName = typeName
+        counter++
+    }
 
-	public UnknownType(String typeName) {
-		this.typeName = typeName;
-		counter++;
-	}
+    constructor() {
+        this.typeName = ""
+        counter++
+    }
 
-	public UnknownType() {
-		this.typeName = "";
-		counter++;
-	}
+    override val defaultValue: Any?
+        get() = null
 
+    override val descriptor: String
+        get() = "L$internalName;"
 
-	@Override
-	public Object getDefaultValue() {
-		return null;
-	}
+    override val internalName: String?
+        get() = name.replace(".", "/")
 
-	@Override
-	public String getDescriptor() {
-		return "L" + getInternalName() + ";";
-	}
+    override val loadVariableOpcode: Int
+        get() = throw RuntimeException("ALOAD on UnknownType")
 
+    override val name: String
+        get() = typeName.ifEmpty { "<unknown>" }
 
-	@Override
-	public String getInternalName() {
-		return getName().replace(".", "/");
-	}
+    override val returnOpcode: Int
+        get() = Opcodes.ARETURN
 
-	@Override
-	public int getLoadVariableOpcode() {
-		throw new RuntimeException("ALOAD on UnknownType");
-	}
+    override val typeClass: Class<*>?
+        get() = null
 
+    override val isNumeric: Boolean
+        get() = false
 
-	@Override
-	public String getName() {
-		return typeName.length() > 0 ? typeName : "<unknown>";
-	}
+    override fun kind(): String? {
+        return null
+    }
 
+    override fun toString(): String {
+        return "$$name"
+    }
 
-	@Override
-	public int getReturnOpcode() {
-		return Opcodes.ARETURN;
-	}
-
-
-	@Override
-	public Class<?> getTypeClass() {
-		return null;
-	}
-
-	@Override
-	public boolean isNumeric() {
-		return false;
-	}
-
-	@Override
-	public String kind() {
-		return null;
-	}
-
-	@Override
-	public String toString() {
-		return "$" + getName();
-	}
+    companion object {
+        var counter: Int = 1
+    }
 }

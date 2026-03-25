@@ -1,89 +1,68 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import org.javatuples.Pair;
-import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Opcodes
+import java.io.Serializable
+import java.util.stream.Collectors
 
-import java.io.Serializable;
-import java.util.List;
-import java.util.stream.Collectors;
+open class StructType(
+    override var name: String,
+    open val parameters: MutableList<Pair<String, IxType>>,
+    open val generics: MutableList<String?>
+) : IxType, Serializable {
+    open var qualifiedName: String? = null
+    open var parentName: String? = null
 
-public class StructType implements IxType, Serializable {
-    public final List<Pair<String, IxType>> parameters;
-    public final List<String> generics;
-    public String name;
-    public String qualifiedName;
-    public String parentName;
-
-    public StructType(String name, List<Pair<String, IxType>> identifiers, List<String> generics) {
-        this.name = name;
-        this.parameters = identifiers;
-        this.generics = generics;
-
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) return false;
-        if (obj instanceof StructType o) {
-            return this.name.equals(o.name);
-        } else {
-            return false;
+    override fun equals(other: Any?): Boolean {
+        return when (other) {
+            null -> false
+            is StructType -> this.name == other.name
+            else -> false
         }
     }
 
-    @Override
-    public Object getDefaultValue() {
-        return null;
+    override val defaultValue: Any?
+        get() = null
+
+    override val descriptor: String?
+        get() = "L${qualifiedName!!.replace(":", "/")};"
+
+    override val internalName: String?
+        get() = name.replace(".", "/")
+
+    override val loadVariableOpcode: Int
+        get() = Opcodes.ALOAD
+
+    override val returnOpcode: Int
+        get() = Opcodes.ARETURN
+
+    override val typeClass: Class<*>?
+        get() = null
+
+    fun hasGenerics(): Boolean {
+        return !generics.isEmpty()
     }
 
-    @Override
-    public String getDescriptor() {
-        String n = qualifiedName.replace(":", "/");
-        return "L" + n + ";";
+    override val isNumeric: Boolean
+        get() = false
+
+    override fun kind(): String {
+        return "struct"
     }
 
-    @Override
-    public String getInternalName() {
-        return getName().replace(".", "/");
+    override fun toString(): String {
+        return "type $name= struct {" +
+                parameters
+                    .stream()
+                    .map<String?> { m: Pair<String?, IxType?>? -> m!!.second!!.name }
+                    .collect(Collectors.joining(", ")) + "}"
     }
 
-    @Override
-    public int getLoadVariableOpcode() {
-        return Opcodes.ALOAD;
+    override fun hashCode(): Int {
+        var result = name.hashCode()
+        result = 31 * result + parameters.hashCode()
+        result = 31 * result + generics.hashCode()
+        result = 31 * result + (qualifiedName?.hashCode() ?: 0)
+        result = 31 * result + (parentName?.hashCode() ?: 0)
+        return result
     }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public int getReturnOpcode() {
-        return Opcodes.ARETURN;
-    }
-
-    @Override
-    public Class<?> getTypeClass() {
-        return null;
-    }
-
-    public boolean hasGenerics() {
-        return !generics.isEmpty();
-    }
-
-    @Override
-    public boolean isNumeric() {
-        return false;
-    }
-
-    @Override
-    public String kind() {
-        return "struct";
-    }
-
-    @Override
-    public String toString() {
-        return "type " + getName() + "= struct" + " {" + parameters.stream().map(m -> m.getValue1().getName()).collect(Collectors.joining(", ")) + "}";
-    }
-
 }

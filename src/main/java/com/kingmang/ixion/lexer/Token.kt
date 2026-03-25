@@ -1,16 +1,12 @@
-package com.kingmang.ixion.lexer;
+package com.kingmang.ixion.lexer
 
-import org.apache.commons.text.StringEscapeUtils;
+import org.apache.commons.text.StringEscapeUtils
 
-public record Token(TokenType type, int line, int col, String source) {
+data class Token(val type: TokenType, val line: Int, val col: Int, val source: String?) {
+    val representation: String?
+        get() = type.representation
 
-	public String representation() {
-		return type.representation;
-	}
-
-	@Override
-	public String toString() {
-		return type.name() + "{" + StringEscapeUtils.escapeJava(source) + "}@" + line + ":" + col;
-	}
-
+    override fun toString(): String {
+        return type.name + "{" + StringEscapeUtils.escapeJava(source) + "}@" + line + ":" + col
+    }
 }

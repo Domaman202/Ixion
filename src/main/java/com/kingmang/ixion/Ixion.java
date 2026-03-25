@@ -7,6 +7,8 @@ import com.kingmang.ixion.exception.IxException;
 import com.kingmang.ixion.runtime.IxionExitException;
 
 import java.io.*;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -227,34 +229,22 @@ public class Ixion {
         return output.toString();
     }
 
-    private String executeBytecodeAndGetOutput(String className) throws IOException, InterruptedException {
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "java",
-                "--enable-preview",
-                "-cp",
-                IxionConstant.OUT_DIR + System.getProperty("path.separator") + "target/classes",
-                className
-        );
-
-        return executeProcessAndGetOutput(processBuilder);
-    }
-
-    private String executeProcessAndGetOutput(ProcessBuilder processBuilder) throws IOException, InterruptedException {
-        Process process = processBuilder.start();
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        StringBuilder output = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            output.append(line).append(System.lineSeparator());
+    private String executeBytecodeAndGetOutput(String className) throws Exception {
+//        var classpath = new URL[]{new File(IxionConstant.OUT_DIR + File.pathSeparator + "target/classes").toURI().toURL()};
+        var classpath = new URL[]{new File(IxionConstant.OUT_DIR).toURI().toURL()};
+        try (var loader = new URLClassLoader(classpath)) {
+            var output = "";
+            var capture = new CombinedOutputCapture();
+            try {
+                loader.loadClass(className).getMethod("main", String[].class).invoke(null, (Object) new String[0]);
+            } catch (Exception e) {
+                System.err.println("Error:");
+                e.printStackTrace(System.err);
+            } finally {
+                output = capture.getOutput();
+                capture.close();
+            }
+            return output;
         }
-
-        int status = process.waitFor();
-        if (status != 0) {
-            output.append("Process finished with exit code ").append(status);
-        }
-
-        return output.toString();
     }
 }

@@ -1,76 +1,50 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Opcodes
+import java.util.*
 
-import java.util.Objects;
-
-public record ListType(IxType contentType) implements IxType {
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
-		ListType listType = (ListType) o;
-		return contentType.equals(listType.contentType());
-	}
+data class ListType(val contentType: IxType) : IxType {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || javaClass != other.javaClass) return false
+        val listType = other as ListType
+        return contentType == listType.contentType
+    }
 
 
-	@Override
-	public Object getDefaultValue() {
-		return null;
-	}
+    override val defaultValue: Any?
+        get() = null
 
-	@Override
-	public String getDescriptor() {
-		return "Ljava/util/List;";
-	}
+    override val descriptor: String?
+        get() = "Ljava/util/List;"
 
+    override val internalName: String?
+        get() = null
 
-	@Override
-	public String getInternalName() {
-		return null;
-	}
+    override val loadVariableOpcode: Int
+        get() = Opcodes.ALOAD
 
-	@Override
-	public int getLoadVariableOpcode() {
-		return Opcodes.ALOAD;
-	}
+    override val name: String
+        get() = "$contentType[]"
 
+    override val returnOpcode: Int
+        get() = Opcodes.ARETURN
 
-	@Override
-	public String getName() {
-		return contentType + "[]";
-	}
+    override val typeClass: Class<*>
+        get() = MutableList::class.java
 
+    override fun hashCode(): Int {
+        return Objects.hash(contentType)
+    }
 
-	@Override
-	public int getReturnOpcode() {
-		return Opcodes.ARETURN;
-	}
+    override val isNumeric: Boolean
+        get() = false
 
+    override fun kind(): String {
+        return "list"
+    }
 
-	@Override
-	public Class<?> getTypeClass() {
-		return java.util.List.class;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(contentType);
-	}
-
-	@Override
-	public boolean isNumeric() {
-		return false;
-	}
-
-	@Override
-	public String kind() {
-		return "list";
-	}
-
-	@Override
-	public String toString() {
-		return getName();
-	}
+    override fun toString(): String {
+        return name
+    }
 }

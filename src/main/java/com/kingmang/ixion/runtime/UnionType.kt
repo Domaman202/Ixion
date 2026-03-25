@@ -1,69 +1,44 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Opcodes
+import java.util.stream.Collectors
 
-import java.util.Set;
-import java.util.stream.Collectors;
+class UnionType(var types: MutableSet<IxType?>) : IxType {
+    override val defaultValue: Any?
+        get() = null
 
-public class UnionType implements IxType {
-    public Set<IxType> types;
+    override val descriptor: String
+        get() = "Ljava/lang/Object;"
 
-    public UnionType(Set<IxType> types) {
-        this.types = types;
+    override val internalName: String?
+        get() = null
 
+    override val loadVariableOpcode: Int
+        get() = Opcodes.ALOAD
+
+    override val name: String?
+        get() = types
+            .stream()
+            .map { obj: IxType? -> obj!!.name }
+            .collect(Collectors.joining(" | "))
+
+    override val returnOpcode: Int
+        get() = Opcodes.ARETURN
+
+    override val typeClass: Class<*>?
+        get() = null
+
+    override val isNumeric: Boolean
+        get() = false
+
+    override fun kind(): String? {
+        return null
     }
 
-    @Override
-    public Object getDefaultValue() {
-        return null;
-    }
-
-    @Override
-    public String getDescriptor() {
-        return "Ljava/lang/Object;";
-    }
-
-
-    @Override
-    public String getInternalName() {
-        return null;
-    }
-
-    @Override
-    public int getLoadVariableOpcode() {
-        return Opcodes.ALOAD;
-    }
-
-    @Override
-    public String getName() {
-        return types.stream().map(IxType::getName).collect(Collectors.joining(" | "));
-    }
-
-
-    @Override
-    public int getReturnOpcode() {
-        return Opcodes.ARETURN;
-    }
-
-
-    @Override
-    public Class<?> getTypeClass() {
-        return null;
-    }
-
-    @Override
-    public boolean isNumeric() {
-        return false;
-    }
-
-    @Override
-    public String kind() {
-        return null;
-    }
-
-
-    @Override
-    public String toString() {
-        return types.stream().map(IxType::getName).collect(Collectors.joining(" | "));
+    override fun toString(): String {
+        return types
+            .stream()
+            .map { obj: IxType? -> obj!!.name }
+            .collect(Collectors.joining(" | "))
     }
 }

@@ -1,15 +1,15 @@
-package com.kingmang.ixion.parser;
+package com.kingmang.ixion.parser
 
-public class Precedence {
-    public static final int ASSIGNMENT = 1;
-    public static final int XOR = 2;
-    public static final int OR = 3;
-    public static final int AND = 4;
-    public static final int COMPARISON = 5;
-    public static final int SUM = 6;
-    public static final int PRODUCT = 7;
-    public static final int EXPONENT = 8;
-    public static final int PREFIX = 9;
-    public static final int POSTFIX = 10;
-    public static final int PRIMARY = 11;
+object Precedence {
+    const val ASSIGNMENT: Int = 1
+    const val XOR: Int = 2
+    const val OR: Int = 3
+    const val AND: Int = 4
+    const val COMPARISON: Int = 5
+    const val SUM: Int = 6
+    const val PRODUCT: Int = 7
+    const val EXPONENT: Int = 8
+    const val PREFIX: Int = 9
+    const val POSTFIX: Int = 10
+    const val PRIMARY: Int = 11
 }

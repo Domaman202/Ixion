@@ -1,7 +1,7 @@
-package com.kingmang.ixion.parser;
+package com.kingmang.ixion.parser
 
-import com.kingmang.ixion.lexer.Position;
+import com.kingmang.ixion.lexer.Position
 
-public interface Node {
-	Position pos();
+interface Node {
+    val position: Position?
 }

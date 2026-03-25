@@ -1,11 +1,8 @@
-package com.kingmang.ixion.lexer;
+package com.kingmang.ixion.lexer
 
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.*
 
-public enum TokenType {
-
+enum class TokenType {
     CASE("case"),
     WITH("with"),
     FOR("for"),
@@ -77,47 +74,63 @@ public enum TokenType {
     ERROR,
     EOF;
 
-    private static final HashMap<String, TokenType> matcher = new HashMap<>();
-    private static final Set<TokenType> KEYWORD_TYPES = EnumSet.of(
-            CASE, FOR, WHILE, IF, ELSE, RETURN, STRUCT, ENUM, DEF,
-            TYPEALIAS, CONSTANT, VARIABLE, PUB, USE, NEW, TRUE, FALSE
-    );
+    val representation: String?
+    val alternate: String?
 
-    static {
-        for (var tokenType : TokenType.values()) {
-            if (tokenType.representation != null) matcher.put(tokenType.representation, tokenType);
-            if (tokenType.alternate != null) matcher.put(tokenType.alternate, tokenType);
+    constructor() {
+        this.representation = null
+        this.alternate = null
+    }
+
+    constructor(representation: String?) {
+        this.representation = representation
+        this.alternate = null
+    }
+
+    constructor(representation: String?, alternate: String?) {
+        this.representation = representation
+        this.alternate = alternate
+    }
+
+    val isKeyword: Boolean
+        get() = KEYWORD_TYPES.contains(this)
+
+    companion object {
+        private val matcher = HashMap<String?, TokenType?>()
+        private val KEYWORD_TYPES: MutableSet<TokenType?> = EnumSet.of(
+            CASE,
+            FOR,
+            WHILE,
+            IF,
+            ELSE,
+            RETURN,
+            STRUCT,
+            ENUM,
+            DEF,
+            TYPEALIAS,
+            CONSTANT,
+            VARIABLE,
+            PUB,
+            USE,
+            NEW,
+            TRUE,
+            FALSE
+        )
+
+        init {
+            for (tokenType in entries) {
+                tokenType.representation?.let { matcher[it] = tokenType }
+                tokenType.alternate?.let { matcher[it] = tokenType }
+            }
         }
-    }
 
-    public final String representation;
-    public final String alternate;
+        fun find(representation: String?): TokenType? {
+            return matcher[representation]
+        }
 
-    TokenType() {
-        this.representation = null;
-        this.alternate = null;
-    }
-
-    TokenType(String representation) {
-        this.representation = representation;
-        this.alternate = null;
-    }
-
-    TokenType(String representation, String alternate) {
-        this.representation = representation;
-        this.alternate = alternate;
-    }
-
-    public static TokenType find(String representation) {
-        return matcher.get(representation);
-    }
-
-    public boolean isKeyword() {
-        return KEYWORD_TYPES.contains(this);
-    }
-
-    public static boolean isKeyword(String str) {
-        TokenType tokenType = find(str);
-        return tokenType != null && tokenType.isKeyword();
+        fun isKeyword(str: String?): Boolean {
+            val tokenType: TokenType? = find(str)
+            return tokenType != null && tokenType.isKeyword
+        }
     }
 }

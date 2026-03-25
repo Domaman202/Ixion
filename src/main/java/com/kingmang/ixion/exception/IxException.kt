@@ -18,29 +18,28 @@ abstract class IxException protected constructor(
     private val templateString: String,
     private val suggestion: String?
 ) {
-    public fun send(ixApi: IxApi?, file: File?, node: Node, vararg varargs: String?) {
+    fun send(ixApi: IxApi?, file: File?, node: Node, vararg varargs: String?) { // todo: not null file
         try {
-            val pos = node.pos()
+            val pos = node.position!!
             var line = pos.line - 2
             if (line < 0) line = 0
             val limit = 3
 
-            val lines = Files.lines(file?.toPath())
+            val lines = Files.lines(file!!.toPath())
             val selection = lines.skip(line.toLong()).limit(limit.toLong()).toList()
 
             val startLine = line
             val endLine = line + limit
             val padding = ceil(log10((endLine + 1).toDouble())).toInt() + 1
             val result = IntStream.range(0, limit)
-                .mapToObj<String?>(IntFunction mapToObj@{ i: Int ->
+                .mapToObj(IntFunction mapToObj@{ i: Int ->
                     if (i < selection.size) {
                         val lineNumber = (i + startLine + 1).toString()
-                        val paddedLineNumber: String = leftPad(lineNumber + ":", padding)
-                        var s: String? = BLUE_START + paddedLineNumber + RESET + " "
-                        s += selection.get(i)
-                        if (i + startLine + 1 == pos.line) {
+                        val paddedLineNumber: String = leftPad("$lineNumber:", padding)
+                        var s: String? = "$BLUE_START$paddedLineNumber$RESET "
+                        s += selection[i]
+                        if (i + startLine + 1 == pos.line)
                             s += "\n" + RED_START + "^".repeat(pos.col + padding) + RESET
-                        }
                         return@mapToObj s
                     } else {
                         return@mapToObj (i + startLine + 1).toString() + "|"
@@ -63,10 +62,10 @@ abstract class IxException protected constructor(
 
             if (ixApi != null) {
                 if (ixApi.developmentMode) {
-                    val stackTrace = Thread.currentThread().getStackTrace()[2]
-                    val sourceLineNumber = stackTrace.getLineNumber()
-                    val sourceLocation = stackTrace.getClassName() + ":" + stackTrace.getMethodName()
-                    val logSource = "\nLogged from " + sourceLocation + "@" + sourceLineNumber + "\n"
+                    val stackTrace = Thread.currentThread().stackTrace[2]
+                    val sourceLineNumber = stackTrace.lineNumber
+                    val sourceLocation = "${stackTrace.className}:${stackTrace.methodName}"
+                    val logSource = "\nLogged from $sourceLocation@$sourceLineNumber\n"
                     buffer.append(logSource)
                 }
             } else {

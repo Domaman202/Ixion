@@ -12,7 +12,7 @@ import com.kingmang.ixion.lexer.TokenType;
 import com.kingmang.ixion.modules.Modules;
 import com.kingmang.ixion.runtime.*;
 import com.kingmang.ixion.typechecker.TypeUtils;
-import org.javatuples.Pair;
+import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -66,7 +66,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
     @Override
     public Optional<IxType> visitTypeAlias(TypeAliasStatement statement) {
         var type = statement.typeStmt.accept(this);
-        currentContext.addVariable(statement.identifier.source(), type.orElseThrow());
+        currentContext.addVariable(statement.identifier.getSource(), type.orElseThrow());
         return Optional.empty();
     }
 
@@ -82,9 +82,9 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
         expr.right.accept(this);
 
         if (expr.left instanceof IdentifierExpression identifier) {
-            var mut = currentContext.getVariableMutability(identifier.identifier.source());
+            var mut = currentContext.getVariableMutability(identifier.identifier.getSource());
             if (mut == IxionConstant.Mutability.IMMUTABLE) {
-                new MutabilityException().send(ixApi, file, identifier, identifier.identifier.source());
+                new MutabilityException().send(ixApi, file, identifier, identifier.identifier.getSource());
             }
 
         } else if (expr.left instanceof PropertyAccessExpression pa) {
@@ -174,7 +174,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
     @NotNull
     @Override
     public Optional<IxType> visitEmptyList(EmptyListExpression emptyList) {
-        var bt = TypeUtils.getFromString(emptyList.tokenType.source());
+        var bt = TypeUtils.INSTANCE.getFromString(emptyList.tokenType.getSource());
         var lt = new ListType(bt);
         emptyList.setRealType(lt);
         return Optional.of(lt);
@@ -225,7 +225,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
 
         statement.expression.accept(this);
 
-        currentContext.addVariable(statement.name.source(), new UnknownType());
+        currentContext.addVariable(statement.name.getSource(), new UnknownType());
 
         statement.block.accept(this);
 
@@ -242,8 +242,8 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      */
     @Override
     public Optional<IxType> visitFunctionStmt(DefStatement statement) {
-        String name = statement.name.source();
-        List<String> generics = statement.generics.stream().map(Token::source).toList();
+        String name = statement.name.getSource();
+        List<String> generics = statement.generics.stream().map(Token::getSource).toList();
 
         var childEnvironment = statement.body.context;
         childEnvironment.parent = currentContext;
@@ -254,14 +254,14 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
             var pt = param.type.accept(this);
             if (pt.isPresent()) {
                 IxType t = pt.get();
-                if (t instanceof UnknownType ut && generics.contains(ut.typeName)) {
-                    var gt = new GenericType(ut.typeName);
-                    parameters.add(Pair.with(param.name.source(), gt));
-                    childEnvironment.addVariable(param.name.source(), gt);
+                if (t instanceof UnknownType ut && generics.contains(ut.getTypeName())) {
+                    var gt = new GenericType(ut.getTypeName());
+                    parameters.add(new Pair<>(param.name.getSource(), gt));
+                    childEnvironment.addVariable(param.name.getSource(), gt);
 
                 } else {
-                    childEnvironment.addVariable(param.name.source(), t);
-                    parameters.add(Pair.with(param.name.source(), t));
+                    childEnvironment.addVariable(param.name.getSource(), t);
+                    parameters.add(new Pair<>(param.name.getSource(), t));
                 }
             } else {
                 IxApi.exit("pt not present", 783);
@@ -271,7 +271,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
         var funcType = new DefType(name, parameters, generics);
         if (statement.returnType != null) {
             var ttt = statement.returnType.accept(this);
-            funcType.returnType = ttt.get();
+            funcType.setReturnType(ttt.get());
         }
         currentContext.addVariableOrError(ixApi, name, funcType, file, statement);
 
@@ -302,7 +302,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
     @NotNull
     @Override
     public Optional<IxType> visitIdentifierExpr(IdentifierExpression expr) {
-        return Optional.ofNullable(currentContext.getVariable(expr.identifier.source()));
+        return Optional.ofNullable(currentContext.getVariable(expr.identifier.getSource()));
     }
 
     /**
@@ -330,11 +330,11 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
      */
     @Override
     public Optional<IxType> visitUse(UseStatement statement) {
-        String requestedImport = statement.stringLiteral.source();
-        if (Modules.modules.containsKey(requestedImport)) {
-            var ree = Modules.getExports(requestedImport);
+        String requestedImport = statement.stringLiteral.getSource();
+        if (Modules.INSTANCE.getModules().containsKey(requestedImport)) {
+            var ree = Modules.INSTANCE.getExports(requestedImport);
             for (var ft : ree) {
-                var typeName = ft.name;
+                var typeName = ft.getName();
                 this.currentContext.addVariableOrError(ixApi, typeName, ft, file, statement);
             }
         }
@@ -361,7 +361,7 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
     @NotNull
     @Override
     public Optional<IxType> visitLiteralExpr(LiteralExpression expr) {
-        var t = TypeUtils.getFromToken(expr.literal.type());
+        var t = TypeUtils.INSTANCE.getFromToken(expr.literal.getType());
         if (t == null) {
             new ImplementationException().send(ixApi, file, expr, "This should never happen. All literals should be builtin, for now.");
         } else {
@@ -515,8 +515,8 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
         List<Pair<String, IxType>> parameters = new ArrayList<>();
         for (int i = 0; i < fieldNames.length; i++) {
             var field = statement.fields.get(i);
-            fieldNames[i] = field.name.source();
-            if (TokenType.isKeyword(fieldNames[i])) {
+            fieldNames[i] = field.name.getSource();
+            if (TokenType.Companion.isKeyword(fieldNames[i])) {
                 new ReservedWordException().send(ixApi, file, statement.fields.get(i), fieldNames[i]);
             }
             var fieldT = field.type.accept(this);
@@ -527,12 +527,12 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
                 IxApi.exit("fieldT not present", 429);
             }
         }
-        String name = statement.name.source();
-        List<String> generics = statement.generics.stream().map(Token::source).collect(Collectors.toList());
+        String name = statement.name.getSource();
+        List<String> generics = statement.generics.stream().map(Token::getSource).collect(Collectors.toList());
 
         StructType structType = new StructType(name, parameters, generics);
-        structType.qualifiedName = source.getFullRelativePath() + "$" + name;
-        structType.parentName = source.getFullRelativePath();
+        structType.setQualifiedName(source.getFullRelativePath() + "$" + name);
+        structType.setParentName(source.getFullRelativePath());
         currentContext.addVariableOrError(ixApi, name, structType, file, statement);
 
         return Optional.of(structType);
@@ -548,17 +548,17 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
     public Optional<IxType> visitTypeAlias(TypeStatement statement) {
         IxType type;
         if (statement.next.isEmpty()) {
-            var bt = TypeUtils.getFromString(statement.identifier.source());
-            type = Objects.requireNonNullElseGet(bt, () -> new UnknownType(statement.identifier.source()));
+            var bt = TypeUtils.INSTANCE.getFromString(statement.identifier.getSource());
+            type = Objects.requireNonNullElseGet(bt, () -> new UnknownType(statement.identifier.getSource()));
             if (statement.listType) {
                 type = new ListType(type);
             }
         }
         else {
-            StringBuilder path = new StringBuilder(statement.identifier.source());
+            StringBuilder path = new StringBuilder(statement.identifier.getSource());
             var ptr = statement.next;
             while (ptr.isPresent()) {
-                path.append(".").append(ptr.get().identifier.source());
+                path.append(".").append(ptr.get().identifier.getSource());
                 ptr = ptr.get().next;
             }
             type = Objects.requireNonNullElse(
@@ -597,12 +597,12 @@ public class EnvironmentVisitor implements Visitor<Optional<IxType>> {
         type = t.orElseGet(UnknownType::new);
 
         var mut = IxionConstant.Mutability.IMMUTABLE;
-        if (statement.mutability.type() == TokenType.VARIABLE) {
+        if (statement.mutability.getType() == TokenType.VARIABLE) {
             mut = IxionConstant.Mutability.MUTABLE;
         }
 
-        currentContext.addVariableOrError(ixApi, statement.name.source(), type, file, statement);
-        currentContext.setVariableMutability(statement.name.source(), mut);
+        currentContext.addVariableOrError(ixApi, statement.name.getSource(), type, file, statement);
+        currentContext.setVariableMutability(statement.name.getSource(), mut);
         return Optional.empty();
     }
 

@@ -1,27 +1,28 @@
-package com.kingmang.ixion.parser.prefix;
+package com.kingmang.ixion.parser.prefix
 
-import com.kingmang.ixion.ast.EmptyListExpression;
-import com.kingmang.ixion.ast.Expression;
-import com.kingmang.ixion.ast.IdentifierExpression;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.parser.Parser;
+import com.kingmang.ixion.ast.EmptyListExpression
+import com.kingmang.ixion.ast.Expression
+import com.kingmang.ixion.ast.IdentifierExpression
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.parser.Parser
 
-public record IdentifierParser() implements PrefixParselet {
-    public Expression parse(Parser parser, Token token) {
-        var pos = parser.getPos();
+class IdentifierParser : PrefixParselet {
+    override fun parse(parser: Parser, token: Token): Expression {
+        var token = token
+        val pos = parser.pos
 
         if (parser.match(TokenType.MODULE)) {
-            var nextToken = parser.consume(TokenType.IDENTIFIER, "Expected identifier after module separator `::`.");
-            token = new Token(TokenType.IDENTIFIER, pos.line(), pos.col(), token.source() + "::" + nextToken.source());
+            val nextToken = parser.consume(TokenType.IDENTIFIER, "Expected identifier after module separator `::`.")
+            token = Token(TokenType.IDENTIFIER, pos.line, pos.col, token.source + "::" + nextToken.source)
         }
 
-        if (parser.peek().type() == TokenType.LBRACK) {
-            parser.consume();
-            parser.consume(TokenType.RBRACK, "Expect ']' to close list constructor.");
-            return new EmptyListExpression(pos, token);
+        if (parser.peek().type == TokenType.LBRACK) {
+            parser.consume()
+            parser.consume(TokenType.RBRACK, "Expect ']' to close list constructor.")
+            return EmptyListExpression(pos, token)
         }
-        return new IdentifierExpression(pos, token);
 
+        return IdentifierExpression(pos, token)
     }
 }

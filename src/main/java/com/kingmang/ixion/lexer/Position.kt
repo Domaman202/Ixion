@@ -1,3 +1,3 @@
-package com.kingmang.ixion.lexer;
+package com.kingmang.ixion.lexer
 
-public record Position(int line, int col) {}
+data class Position(val line: Int, val col: Int)

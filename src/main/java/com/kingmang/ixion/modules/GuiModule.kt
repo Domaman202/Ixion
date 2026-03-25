@@ -1,4 +1,4 @@
-package com.kingmang.ixion.modules;
+package com.kingmang.ixion.modules
 
-@SuppressWarnings("unused")
-public class GuiModule {}
+@Suppress("unused")
+class GuiModule 

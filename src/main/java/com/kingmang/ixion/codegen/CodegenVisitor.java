@@ -12,9 +12,9 @@ import com.kingmang.ixion.lexer.Token;
 import com.kingmang.ixion.lexer.TokenType;
 import com.kingmang.ixion.runtime.*;
 import com.kingmang.ixion.typechecker.TypeResolver;
+import kotlin.Pair;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.NotImplementedException;
-import org.javatuples.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
@@ -81,7 +81,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
         if (expr.left instanceof IdentifierExpression id) {
             expr.right.accept(this);
-            var index = funcType.getLocalMap().get(id.identifier.source());
+            var index = funcType.getLocalMap().get(id.identifier.getSource());
             ga.storeLocal(index);
         } else if (expr.left instanceof PropertyAccessExpression pa) {
             var lType = expr.left.getRealType();
@@ -95,7 +95,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             for (int i = 0; i < typeChain.size() - 2; i++) {
                 var current = typeChain.get(i);
                 var next = typeChain.get(i + 1);
-                var fieldName = identifiers.get(i).identifier.source();
+                var fieldName = identifiers.get(i).identifier.getSource();
                 ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
             }
 
@@ -108,7 +108,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             }
 
             ga.putField(Type.getType(typeChain.get(typeChain.size() - 2).getDescriptor()),
-                    identifiers.get(identifiers.size() - 1).identifier.source(),
+                    identifiers.get(identifiers.size() - 1).identifier.getSource(),
                     Type.getType(typeChain.get(typeChain.size() - 1).getDescriptor()));
 
         } else {
@@ -159,7 +159,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", descriptor, false);
             ga.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
         } else {
-            switch (expr.operator.type()) {
+            switch (expr.operator.getType()) {
                 case AND -> {
                     Label falseLabel = new Label();
                     Label successLabel = new Label();
@@ -209,14 +209,14 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
                     Label endLabel = new Label();
                     Label falseLabel = new Label();
 
-                    int opcode = switch (expr.operator.type()) {
+                    int opcode = switch (expr.operator.getType()) {
                         case EQUAL -> GeneratorAdapter.NE;
                         case NOTEQUAL -> GeneratorAdapter.EQ;
                         case LT -> GeneratorAdapter.GT;
                         case GT -> GeneratorAdapter.LT;
                         case LE -> GeneratorAdapter.GE;
                         case GE -> GeneratorAdapter.LE;
-                        default -> throw new IllegalStateException("Unexpected value: " + expr.operator.type());
+                        default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
                     };
                     ga.ifCmp(cmpType, opcode, falseLabel);
                     ga.push(true);
@@ -240,7 +240,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
                 case POW -> {
                 }
                 case ADD, SUB, MUL, DIV -> arithmetic(ga, left, right, expr.operator, expr.getRealType(), this);
-                case null, default -> throw new IllegalStateException("Unexpected value: " + expr.operator.type());
+                case null, default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
             }
 
         }
@@ -272,24 +272,24 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         var funcType = functionStack.peek();
 
         if (expr.item instanceof IdentifierExpression identifier) {
-            expr.item.setRealType(currentContext.getVariable(identifier.identifier.source()));
+            expr.item.setRealType(currentContext.getVariable(identifier.identifier.getSource()));
         }
 
         if (expr.item.getRealType() instanceof DefType callType) {
-            if (callType.glue) {
-                String owner = callType.owner;
-                String name = callType.name;
-                if (callType.isPrefixed) name = "_" + name;
+            if (callType.getGlue()) {
+                String owner = callType.getOwner();
+                String name = callType.getName();
+                if (callType.isPrefixed()) name = "_" + name;
 
-                var params = callType.parameters.stream().map(arg -> Pair.with(arg.getValue1().getName(), arg.getValue1())).collect(Collectors.toList());
+                var params = callType.getParameters().stream().map(arg -> new Pair<>(arg.getSecond().getName(), arg.getSecond())).collect(Collectors.toList());
 
-                IxType returnType = callType.returnType;
+                IxType returnType = callType.getReturnType();
                 String methodDescriptor = CollectionUtil.getMethodDescriptor(params, returnType);
 
                 CollectionUtil.zip(params, expr.arguments, (param, arg) -> {
                     arg.accept(this);
                     if (arg.getRealType() != null && arg.getRealType() instanceof BuiltInType btArg) {
-                        if (param.getValue1() instanceof ExternalType et && et.foundClass.equals(Object.class)) {
+                        if (param.getSecond() instanceof ExternalType et && et.getFoundClass().equals(Object.class)) {
                             btArg.doBoxing(funcType.getGa());
                         }
                     }
@@ -298,11 +298,11 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
                 funcType.getGa().visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false);
             } else {
                 var ga = funcType.getGa();
-                CollectionUtil.zip(callType.parameters, expr.arguments, (param, arg) -> {
+                CollectionUtil.zip(callType.getParameters(), expr.arguments, (param, arg) -> {
                     arg.accept(this);
                     if (arg.getRealType() != null && arg.getRealType() instanceof BuiltInType btArg) {
-                        switch (param.getValue1()) {
-                            case ExternalType et when et.foundClass.equals(Object.class) -> btArg.doBoxing(ga);
+                        switch (param.getSecond()) {
+                            case ExternalType et when et.getFoundClass().equals(Object.class) -> btArg.doBoxing(ga);
                             case UnionType ut -> btArg.doBoxing(funcType.getGa());
                             default -> {
                             }
@@ -311,9 +311,9 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
                 });
 
                 var specialization = callType.buildSpecialization(expr.arguments);
-                var returnType = callType.returnType;
+                var returnType = callType.getReturnType();
                 if (returnType instanceof GenericType gt) {
-                    returnType = DefType.Companion.getSpecializedType(specialization, gt.key());
+                    returnType = DefType.Companion.getSpecializedType(specialization, gt.getKey());
 
                 }
 
@@ -321,9 +321,9 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
                 String descriptor = CollectionUtil.getMethodDescriptor(parameters, returnType);
 
-                String methodDescriptor = CollectionUtil.getMethodDescriptor(callType.parameters, callType.returnType);
+                String methodDescriptor = CollectionUtil.getMethodDescriptor(callType.getParameters(), callType.getReturnType());
                 methodDescriptor = descriptor;
-                String name = "_" + callType.name;
+                String name = "_" + callType.getName();
                 String owner = FilenameUtils.removeExtension(source.getFullRelativePath());
 
                 if (callType.external != null) {
@@ -336,14 +336,14 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         } else if (expr.item.getRealType() instanceof StructType st) {
             var ga = funcType.getGa();
 
-            ga.newInstance(Type.getType("L" + st.qualifiedName + ";"));
+            ga.newInstance(Type.getType("L" + st.getQualifiedName() + ";"));
             ga.visitInsn(Opcodes.DUP);
 
             StringBuilder typeDescriptor = new StringBuilder();
-            CollectionUtil.zip(st.parameters, expr.arguments, (param, arg) -> {
+            CollectionUtil.zip(st.getParameters(), expr.arguments, (param, arg) -> {
                 arg.accept(this);
-                var paramType = param.getValue1();
-                if (paramType instanceof UnionType ut || paramType instanceof GenericType) {
+                var paramType = param.getSecond();
+                if (paramType instanceof UnionType || paramType instanceof GenericType) {
                     typeDescriptor.append(paramType.getDescriptor());
                     if (arg.getRealType() instanceof BuiltInType btArg) {
                         btArg.doBoxing(ga);
@@ -355,7 +355,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
             });
 
-            ga.invokeConstructor(Type.getType("L" + st.qualifiedName + ";"), new Method(IxionConstant.getInit(), "(" + typeDescriptor + ")V"));
+            ga.invokeConstructor(Type.getType("L" + st.getQualifiedName() + ";"), new Method(IxionConstant.getInit(), "(" + typeDescriptor + ")V"));
 
 
         } else {
@@ -459,7 +459,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         ga.invokeInterface(IxionConstant.getIteratorType(), new Method("next", "()Ljava/lang/Object;"));
         BuiltInType.INT.doUnboxing(ga);
         stmt.setLocalExprIndex(ga.newLocal(Type.getType(BuiltInType.INT.getDescriptor())));
-        funcType.getLocalMap().put(stmt.name.source(), stmt.getLocalExprIndex());
+        funcType.getLocalMap().put(stmt.name.getSource(), stmt.getLocalExprIndex());
         funcType.getGa().storeLocal(stmt.getLocalExprIndex(), Type.getType(BuiltInType.INT.getDescriptor()));
 
         stmt.block.accept(this);
@@ -478,19 +478,19 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
      */
     @Override
     public Optional<ClassWriter> visitFunctionStmt(DefStatement stmt) {
-        var funcType = currentContext.getVariableTyped(stmt.name.source(), DefType.class);
+        var funcType = currentContext.getVariableTyped(stmt.name.getSource(), DefType.class);
         functionStack.add(funcType);
         var childEnvironment = stmt.body.context;
-        String name = "_" + funcType.name;
+        String name = "_" + funcType.getName();
         var access = Opcodes.ACC_PUBLIC + Opcodes.ACC_STATIC;
 
         if (funcType.hasGenerics()) {
 
-            for (Map<String, IxType> specialization : funcType.specializations) {
+            for (Map<String, IxType> specialization : funcType.getSpecializations()) {
                 funcType.setCurrentSpecialization(specialization);
-                var returnType = funcType.returnType;
+                var returnType = funcType.getReturnType();
                 if (returnType instanceof GenericType gt) {
-                    returnType = DefType.Companion.getSpecializedType(specialization, gt.key());
+                    returnType = DefType.Companion.getSpecializedType(specialization, gt.getKey());
                 }
 
                 var parameters = funcType.buildParametersFromSpecialization(specialization);
@@ -499,9 +499,9 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
                 var mv = cw.visitMethod(access, name, descriptor, null, null);
                 funcType.setGa(new GeneratorAdapter(mv, access, name, descriptor));
-                for (int i = 0; i < funcType.parameters.size(); i++) {
-                    var param = funcType.parameters.get(i);
-                    funcType.getArgMap().put(param.getValue0(), i);
+                for (int i = 0; i < funcType.getParameters().size(); i++) {
+                    var param = funcType.getParameters().get(i);
+                    funcType.getArgMap().put(param.getFirst(), i);
                 }
 
                 currentContext = childEnvironment;
@@ -512,16 +512,16 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             functionStack.pop();
         } else {
 
-            String descriptor = CollectionUtil.getMethodDescriptor(funcType.parameters, funcType.returnType);
-            if (funcType.name.equals("main")) {
+            String descriptor = CollectionUtil.getMethodDescriptor(funcType.getParameters(), funcType.getReturnType());
+            if (funcType.getName().equals("main")) {
                 name = "main";
                 descriptor = "([Ljava/lang/String;)V";
             }
             var mv = cw.visitMethod(access, name, descriptor, null, null);
             funcType.setGa(new GeneratorAdapter(mv, access, name, descriptor));
-            for (int i = 0; i < funcType.parameters.size(); i++) {
-                var param = funcType.parameters.get(i);
-                funcType.getArgMap().put(param.getValue0(), i);
+            for (int i = 0; i < funcType.getParameters().size(); i++) {
+                var param = funcType.getParameters().get(i);
+                funcType.getArgMap().put(param.getFirst(), i);
             }
 
             currentContext = childEnvironment;
@@ -554,16 +554,16 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
     public Optional<ClassWriter> visitIdentifierExpr(IdentifierExpression expr) {
         var funcType = functionStack.peek();
         var ga = funcType.getGa();
-        var type = currentContext.getVariable(expr.identifier.source());
+        var type = currentContext.getVariable(expr.identifier.getSource());
 
         if (type instanceof GenericType gt) {
-            type = funcType.getCurrentSpecialization().get(gt.key());
+            type = funcType.getCurrentSpecialization().get(gt.getKey());
         }
 
         expr.setRealType(type);
 
         int index;
-        String source = expr.identifier.source();
+        String source = expr.identifier.getSource();
         if (funcType.getLocalMap().containsKey(source)) {
             index = funcType.getLocalMap().get(source);
             ga.loadLocal(index, Type.getType(type.getDescriptor()));
@@ -632,7 +632,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
     @Override
     public Optional<ClassWriter> visitLiteralExpr(LiteralExpression expr) {
         if (expr.getRealType() instanceof BuiltInType bt) {
-            var transformed = TypeResolver.getValueFromString(expr.literal.source(), BuiltInType.Companion.getFromToken(expr.literal.type()));
+            var transformed = TypeResolver.INSTANCE.getValueFromString(expr.literal.getSource(), BuiltInType.Companion.getFromToken(expr.literal.getType()));
             var ga = functionStack.peek().getGa();
             switch (bt) {
                 case INT -> ga.push((int) transformed);
@@ -659,7 +659,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
         ga.newInstance(IxionConstant.getListWrapperType());
         ga.dup();
-        ga.push(((ListType) expr.getRealType()).contentType().getName());
+        ga.push(((ListType) expr.getRealType()).getContentType().getName());
         ga.invokeConstructor(IxionConstant.getListWrapperType(), new Method(IxionConstant.getInit(), "(Ljava/lang/String;)V"));
         ga.dup();
         ga.invokeVirtual(IxionConstant.getListWrapperType(), new Method("list", "()Ljava/util/ArrayList;"));
@@ -703,7 +703,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             var block = pair.getValue1();
             var t = casee.types.get(typeStmt);
             if (t instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.typeName);
+                var attempt = currentContext.getVariable(ukt.getTypeName());
                 if (attempt != null) {
                     t = attempt;
                 }
@@ -721,17 +721,17 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
                 ga.loadLocal(localExprIndex);
                 funcType.getGa().invokeVirtual(IxionConstant.getListWrapperType(), new Method("name", "()Ljava/lang/String;"));
-                ga.push(lt.contentType().getName());
+                ga.push(lt.getContentType().getName());
                 funcType.getGa().invokeVirtual(Type.getType(String.class), new Method("equals", "(Ljava/lang/Object;)Z"));
                 ga.visitJumpInsn(Opcodes.IFEQ, end);
                 ga.loadLocal(localExprIndex);
 
             } else {
                 Type typeClass;
-                if (t instanceof BuiltInType bt) {
+                if (t instanceof BuiltInType) {
                     typeClass = Type.getType(t.getTypeClass());
                 } else if (t instanceof StructType st) {
-                    typeClass = Type.getType("L" + st.qualifiedName + ";");
+                    typeClass = Type.getType("L" + st.getQualifiedName() + ";");
                 } else {
                     typeClass = Type.getType(t.getDescriptor());
                 }
@@ -796,16 +796,16 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         expr.expression.accept(this);
         if (expr.getRealType() instanceof BuiltInType bt) {
             bt.pushOne(ga);
-            int op = switch (expr.operator.type()) {
+            int op = switch (expr.operator.getType()) {
                 case PLUSPLUS -> bt.getAddOpcode();
                 case MINUSMINUS -> bt.getSubtractOpcode();
-                default -> throw new IllegalStateException("Unexpected value: " + expr.operator.type());
+                default -> throw new IllegalStateException("Unexpected value: " + expr.operator.getType());
             };
 
             ga.visitInsn(op);
             if (expr.expression instanceof IdentifierExpression eid) {
 
-                ga.storeLocal(functionStack.peek().getLocalMap().get(eid.identifier.source()));
+                ga.storeLocal(functionStack.peek().getLocalMap().get(eid.identifier.getSource()));
             }
         } else {
             IxApi.Companion.exit("postfix only works with builtin types", 49);
@@ -825,7 +825,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         expr.right.accept(this);
 
         var t = expr.right.getRealType();
-        if (expr.operator.type() == TokenType.SUB && t instanceof BuiltInType bt) {
+        if (expr.operator.getType() == TokenType.SUB && t instanceof BuiltInType bt) {
             ga.visitInsn(bt.getNegOpcode());
             expr.setRealType(t);
         }
@@ -853,11 +853,11 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
                 var current = expr.typeChain.get(i);
                 var next = expr.typeChain.get(i + 1);
 
-                var key = ((GenericType) next).key();
+                var key = ((GenericType) next).getKey();
 
-                var r = mst.resolved.get(key);
+                var r = mst.getResolved().get(key);
 
-                var fieldName = expr.identifiers.get(i).identifier.source();
+                var fieldName = expr.identifiers.get(i).identifier.getSource();
                 ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
 
                 ga.checkCast(Type.getType(r.getDescriptor()));
@@ -871,7 +871,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
             for (int i = 0; i < expr.typeChain.size() - 1; i++) {
                 var current = expr.typeChain.get(i);
                 var next = expr.typeChain.get(i + 1);
-                var fieldName = expr.identifiers.get(i).identifier.source();
+                var fieldName = expr.identifiers.get(i).identifier.getSource();
                 ga.getField(Type.getType(current.getDescriptor()), fieldName, Type.getType(next.getDescriptor()));
 
 
@@ -913,13 +913,13 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         if (!(stmt.expression instanceof EmptyExpression)) {
             stmt.expression.accept(this);
 
-            if (funcType.returnType instanceof UnionType && stmt.expression.getRealType() instanceof BuiltInType bt) {
+            if (funcType.getReturnType() instanceof UnionType && stmt.expression.getRealType() instanceof BuiltInType bt) {
                 bt.doBoxing(funcType.getGa());
             }
 
-            var returnType = funcType.returnType;
+            var returnType = funcType.getReturnType();
             if (returnType instanceof GenericType gt) {
-                returnType = DefType.Companion.getSpecializedType(funcType.getCurrentSpecialization(), gt.key());
+                returnType = DefType.Companion.getSpecializedType(funcType.getCurrentSpecialization(), gt.getKey());
             }
 
             funcType.getGa().visitInsn(returnType.getReturnOpcode());
@@ -937,9 +937,9 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
     @Override
     public Optional<ClassWriter> visitStruct(StructStatement struct) {
         var innerCw = new ClassWriter(CodegenVisitor.flags);
-        var structType = currentContext.getVariableTyped(struct.name.source(), StructType.class);
+        var structType = currentContext.getVariableTyped(struct.name.getSource(), StructType.class);
 
-        String name = structType.name;
+        String name = structType.getName();
         String innerName = source.getFullRelativePath() + "$" + name;
 
         innerCw.visit(CodegenVisitor.CLASS_VERSION, IxionConstant.getPublicStatic(), innerName, null, "java/lang/Object", null);
@@ -948,10 +948,10 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
         StringBuilder constructorDescriptor = new StringBuilder();
 
-        for (var pair : structType.parameters) {
-            IxType type = pair.getValue1();
+        for (var pair : structType.getParameters()) {
+            IxType type = pair.getSecond();
             var descriptor = type.getDescriptor();
-            String n = pair.getValue0();
+            String n = pair.getFirst();
 
             var fieldVisitor = innerCw.visitField(Opcodes.ACC_PUBLIC, n, descriptor, null, null);
             fieldVisitor.visitEnd();
@@ -968,10 +968,10 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         ga.loadThis();
         ga.invokeConstructor(IxionConstant.getObjectType(), new Method(IxionConstant.getInit(), "()V"));
 
-        for (int i = 0; i < structType.parameters.size(); i++) {
-            IxType type = structType.parameters.get(i).getValue1();
+        for (int i = 0; i < structType.getParameters().size(); i++) {
+            IxType type = structType.getParameters().get(i).getSecond();
             descriptor = type.getDescriptor();
-            String n = structType.parameters.get(i).getValue0();
+            String n = structType.getParameters().get(i).getFirst();
             ga.visitVarInsn(Opcodes.ALOAD, 0);
             ga.loadArg(i);
 
@@ -1020,7 +1020,7 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
 
         var type = currentContext.getVariable(stmt.identifier());
         if (type instanceof GenericType gt) {
-            type = funcType.getCurrentSpecialization().get(gt.key());
+            type = funcType.getCurrentSpecialization().get(gt.getKey());
         }
         stmt.setLocalIndex(funcType.getGa().newLocal(Type.getType(type.getDescriptor())));
         funcType.getLocalMap().put(stmt.identifier(), stmt.getLocalIndex());
@@ -1135,13 +1135,13 @@ public class CodegenVisitor implements Visitor<Optional<ClassWriter>> {
         }
         if (goalType instanceof BuiltInType bt) {
 
-            int op = switch (operator.type()) {
+            int op = switch (operator.getType()) {
                 case ADD -> bt.getAddOpcode();
                 case SUB -> bt.getSubtractOpcode();
                 case MUL -> bt.getMultiplyOpcode();
                 case DIV -> bt.getDivideOpcode();
                 case LT, GT, LE, GE -> 0;
-                default -> throw new IllegalStateException("Unexpected value: " + operator.type());
+                default -> throw new IllegalStateException("Unexpected value: " + operator.getType());
             };
             ga.visitInsn(op);
         } else {

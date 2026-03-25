@@ -1,25 +1,23 @@
-package com.kingmang.ixion;
+package com.kingmang.ixion
 
-import com.kingmang.ixion.ast.*;
-import org.jetbrains.annotations.NotNull;
+import com.kingmang.ixion.ast.*
 
-public interface ExprVisitor<R> {
-    @NotNull R visitAssignExpr(AssignExpression expression);
-    @NotNull R visitBad(BadExpression expression);
-    @NotNull R visitBinaryExpr(BinaryExpression expression);
-    @NotNull R visitCall(CallExpression expression);
-    @NotNull R visitEmpty(EmptyExpression expression);
-    @NotNull R visitEmptyList(EmptyListExpression expression);
-    @NotNull R visitGroupingExpr(GroupingExpression expression);
-    @NotNull R visitIdentifierExpr(IdentifierExpression expression);
-    @NotNull R visitIndexAccess(IndexAccessExpression expression);
-    @NotNull R visitLiteralExpr(LiteralExpression expression);
-    @NotNull R visitLiteralList(LiteralListExpression expression);
-    @NotNull R visitModuleAccess(ModuleAccessExpression expression);
-    @NotNull R visitPostfixExpr(PostfixExpression expression);
-    @NotNull R visitPrefix(PrefixExpression expr);
-    @NotNull R visitPropertyAccess(PropertyAccessExpression expression);
-    @NotNull R visitLambda(@NotNull LambdaExpression expression);
-
-    R visitEnumAccess(EnumAccessExpression expression);
+interface ExprVisitor<R> {
+    fun visitAssignExpr(expression: AssignExpression?): R
+    fun visitBad(expression: BadExpression?): R
+    fun visitBinaryExpr(expression: BinaryExpression?): R
+    fun visitCall(expression: CallExpression?): R
+    fun visitEmpty(expression: EmptyExpression?): R
+    fun visitEmptyList(expression: EmptyListExpression?): R
+    fun visitGroupingExpr(expression: GroupingExpression?): R
+    fun visitIdentifierExpr(expression: IdentifierExpression?): R
+    fun visitIndexAccess(expression: IndexAccessExpression?): R
+    fun visitLiteralExpr(expression: LiteralExpression?): R
+    fun visitLiteralList(expression: LiteralListExpression?): R
+    fun visitModuleAccess(expression: ModuleAccessExpression?): R
+    fun visitPostfixExpr(expression: PostfixExpression?): R
+    fun visitPrefix(expr: PrefixExpression?): R
+    fun visitPropertyAccess(expression: PropertyAccessExpression?): R
+    fun visitLambda(expression: LambdaExpression): R
+    fun visitEnumAccess(expression: EnumAccessExpression?): R
 }

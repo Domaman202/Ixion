@@ -1,7 +1,7 @@
 package com.kingmang.ixion.runtime;
 
 import com.kingmang.ixion.exception.Panic;
-import org.javatuples.Pair;
+import kotlin.Pair;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -112,7 +112,7 @@ public class CollectionUtil {
 
     public static String getMethodDescriptor(List<Pair<String, IxType>> parameters, IxType returnType) {
         String parametersDescriptor = parameters.stream()
-                .map(parameter -> parameter.getValue1().getDescriptor())
+                .map(parameter -> parameter.getSecond().getDescriptor())
                 .collect(Collectors.joining("", "(", ")"));
         String returnDescriptor = returnType.getDescriptor();
         return parametersDescriptor + returnDescriptor;

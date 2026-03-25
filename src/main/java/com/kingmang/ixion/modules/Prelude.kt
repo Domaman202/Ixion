@@ -1,54 +1,53 @@
-package com.kingmang.ixion.modules;
+package com.kingmang.ixion.modules
 
-import com.kingmang.ixion.exception.Panic;
-import com.kingmang.ixion.runtime.CollectionUtil;
+import com.kingmang.ixion.exception.Panic
+import com.kingmang.ixion.runtime.CollectionUtil.IxListWrapper
+import java.util.*
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Scanner;
-import java.util.stream.IntStream;
-
-
-@SuppressWarnings("unused")
-public class Prelude {
-
-    public static void panic(Object msg) {
-        new Panic((String) msg).send();
+@Suppress("unused")
+object Prelude {
+    @JvmStatic
+    fun panic(msg: Any?) {
+        Panic(msg as String?).send()
     }
 
-	public static void println(Object arg) {
-		System.out.println(arg.toString());
-	}
+    @JvmStatic
+    fun println(arg: Any) {
+        kotlin.io.println(arg.toString())
+    }
 
-	public static void print(Object arg) {
-		System.out.print(arg.toString());
-	}
+    @JvmStatic
+    fun print(arg: Any) {
+        kotlin.io.print(arg.toString())
+    }
 
-    public static String readLine() {
-        var scanner = new Scanner(System.in);
+    @JvmStatic
+    fun readLine(): String? {
+        val scanner = Scanner(System.`in`)
         if (scanner.hasNextLine()) {
-            var s = scanner.nextLine();
-            return s;
+            val s = scanner.nextLine()
+            return s
         }
-        scanner.close();
-        return null;
+        scanner.close()
+        return null
     }
 
-    public static <T> void push(List<T> r, T a) {
-        r.add(a);
+    @JvmStatic
+    fun <T> push(r: MutableList<T?>, a: T?) {
+        r.add(a)
     }
 
-    public static <T> T pop(List<T> r) {
-        return r.remove(r.size() - 1);
+    @JvmStatic
+    fun <T> pop(r: MutableList<T?>): T? {
+        return r.removeAt(r.size - 1)
     }
 
-
-    public static int len(Object r) {
-		if(r instanceof CollectionUtil.IxListWrapper list)
-            return list.list().size() + 1;
-	    else if (r instanceof String s)
-            return s.length();
-
-        return -1;
+    @JvmStatic
+    fun len(r: Any?): Int {
+        return when (r) {
+            is IxListWrapper -> r.list.size + 1
+            is String        -> r.length
+            else             -> -1
+        }
     }
 }

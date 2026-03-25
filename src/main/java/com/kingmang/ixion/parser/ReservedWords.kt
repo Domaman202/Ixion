@@ -1,21 +1,18 @@
-package com.kingmang.ixion.parser;
+package com.kingmang.ixion.parser
 
-import java.util.HashSet;
-import java.util.Set;
+object ReservedWords {
+    val reserved: MutableSet<String?> = HashSet()
 
-public class ReservedWords {
-	static final Set<String> reserved = new HashSet<>();
+    init {
+        reserved.add("int")
+        reserved.add("float")
+        reserved.add("bool")
+        reserved.add("string")
+        reserved.add("def")
+        reserved.add("struct")
+    }
 
-	static {
-		reserved.add("int");
-		reserved.add("float");
-		reserved.add("bool");
-		reserved.add("string");
-		reserved.add("def");
-		reserved.add("struct");
-	}
-
-	public static boolean isReserved(String word) {
-		return reserved.contains(word);
-	}
+    fun isReserved(word: String?): Boolean {
+        return reserved.contains(word)
+    }
 }

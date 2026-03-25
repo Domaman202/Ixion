@@ -113,7 +113,7 @@ data class IxApi(
     fun output(compilationSet: MutableMap<String?, out IxFile>) {
         val bytecodeGenerator = BytecodeGenerator()
         for (key in compilationSet.keys) {
-            val source: IxFile = compilationSet.get(key)!!
+            val source: IxFile = compilationSet[key]!!
             val allByteUnits = bytecodeGenerator.generate(this, source)
             IxException.killIfErrors(this, "Correct build errors before compilation can complete.")
 
@@ -137,14 +137,14 @@ data class IxApi(
 
                 val innerName = source.fullRelativePath + "$" + st.name
 
-                fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, innerName + ".class").toString()
+                fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, "$innerName.class").toString()
                 tmp = File(fileName)
                 tmp.getParentFile().mkdirs()
                 try {
                     output = FileOutputStream(fileName)
                     output.write(innerCw.toByteArray())
                     output.close()
-                } catch (e: IOException) {
+                } catch (_: IOException) {
                     exit("The above call to mkdirs() should have worked.", 9)
                 }
             }

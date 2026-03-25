@@ -1,9 +1,9 @@
-package com.kingmang.ixion.parser.prefix;
+package com.kingmang.ixion.parser.prefix
 
-import com.kingmang.ixion.ast.*;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.parser.Parser;
+import com.kingmang.ixion.ast.Expression
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.parser.Parser
 
-public interface PrefixParselet {
-    Expression parse(Parser parser, Token token);
+interface PrefixParselet {
+    fun parse(parser: Parser, token: Token): Expression
 }

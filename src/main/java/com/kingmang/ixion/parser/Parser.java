@@ -121,7 +121,7 @@ public class Parser {
      */
     public Expression expression(int precedence) {
         Token token = consume();
-        PrefixParselet prefix = prefixParselets.get(token.type());
+        PrefixParselet prefix = prefixParselets.get(token.getType());
 
         if (prefix == null) {
             error(token, "Could not parse.");
@@ -132,7 +132,7 @@ public class Parser {
 
         while (precedence < getPrecedence()) {
             token = consume();
-            InfixParselet infix = infixParselets.get(token.type());
+            InfixParselet infix = infixParselets.get(token.getType());
             left = infix.parse(this, left, token);
         }
 
@@ -148,7 +148,7 @@ public class Parser {
         Expression expression;
 
         // Handle return with or without expression on same line
-        if (peek().type() != RBRACE && peek().line() == pos.line()) {
+        if (peek().getType() != RBRACE && peek().getLine() == pos.getLine()) {
             expression = expression();
         } else {
             expression = new EmptyExpression(pos);
@@ -319,7 +319,7 @@ public class Parser {
         DefStatement func =  new DefStatement(pos, name, parameters, returnType, block, generics);
         if (!hasReturnStatement(func.body) && returnType != null) {
             error(name,
-                    "Function must return a value of type " + "'" + func.returnType.identifier.source() + "'");
+                    "Function must return a value of type " + "'" + func.returnType.identifier.getSource() + "'");
         }
         return func;
     }
@@ -368,14 +368,14 @@ public class Parser {
             }
 
             Token part = consume(IDENTIFIER, "Expected identifier in using path");
-            usePath.append(part.source());
+            usePath.append(part.getSource());
             first = false;
         }
 
         consume(GT, "Expected '>' at the end of import path");
 
         Optional<Token> id = Optional.empty();
-        Token useToken = new Token(STRING, pos.line(), pos.col(), usePath.toString());
+        Token useToken = new Token(STRING, pos.getLine(), pos.getCol(), usePath.toString());
         return new UseStatement(pos, useToken, id);
     }
 
@@ -403,7 +403,7 @@ public class Parser {
                 var stmt = new ExpressionStatement(getPos(), expression());
                 caseBody = new BlockStatement(getPos(), List.of(stmt), new Context());
             }
-            cases.put(type, new Pair<>(s.source(), caseBody));
+            cases.put(type, new Pair<>(s.getSource(), caseBody));
         }
 
         consume(RBRACE, "Expected closing curly braces after case body.");
@@ -620,7 +620,7 @@ public class Parser {
      * @return True if current token matches the type
      */
     boolean check(TokenType type) {
-        return peek().type() == type;
+        return peek().getType() == type;
     }
 
 
@@ -640,10 +640,10 @@ public class Parser {
      * @param message The error message
      */
     void error(Token token, String message) {
-        if (token.type() == EOF) {
-            error(token.line(), " at end", message);
+        if (token.getType() == EOF) {
+            error(token.getLine(), " at end", message);
         } else {
-            error(token.line(), " at '" + token.source() + "'", message);
+            error(token.getLine(), " at '" + token.getSource() + "'", message);
         }
     }
 
@@ -652,8 +652,8 @@ public class Parser {
      * @return The precedence value
      */
     int getPrecedence() {
-        InfixParselet parser = infixParselets.get(lookAhead().type());
-        if (parser != null) return parser.precedence();
+        InfixParselet parser = infixParselets.get(lookAhead().getType());
+        if (parser != null) return parser.getPrecedence();
         return 0;
     }
 
@@ -685,7 +685,7 @@ public class Parser {
      * @return True if not at end of input
      */
     boolean notAtEnd() {
-        return peek().type() != EOF;
+        return peek().getType() != EOF;
     }
 
     /**
@@ -729,7 +729,7 @@ public class Parser {
      */
     public boolean match(TokenType expected) {
         Token token = lookAhead();
-        if (token.type() != expected) {
+        if (token.getType() != expected) {
             return false;
         }
         consume();

@@ -1,32 +1,27 @@
-package com.kingmang.ixion.parser.infix;
+package com.kingmang.ixion.parser.infix
 
-import com.kingmang.ixion.ast.CallExpression;
-import com.kingmang.ixion.ast.Expression;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.parser.Parser;
-import com.kingmang.ixion.parser.Precedence;
+import com.kingmang.ixion.ast.CallExpression
+import com.kingmang.ixion.ast.Expression
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.parser.Parser
+import com.kingmang.ixion.parser.Precedence
 
-import java.util.ArrayList;
-import java.util.List;
-
-public record CallParser() implements InfixParselet {
-    public Expression parse(Parser parser, Expression left, Token token) {
-        var pos = parser.getPos();
-        List<Expression> args = new ArrayList<>();
+class CallParser : InfixParselet {
+    override fun parse(parser: Parser, left: Expression, token: Token): Expression {
+        val pos = parser.pos
+        val args = ArrayList<Expression?>()
 
         if (!parser.match(TokenType.RPAREN)) {
             do {
-                args.add(parser.expression());
-            } while (parser.match(TokenType.COMMA));
-            parser.optional(TokenType.COMMA);
-            parser.consume(TokenType.RPAREN, "Expected closing ')' after function call.");
+                args.add(parser.expression())
+            } while (parser.match(TokenType.COMMA))
+            parser.optional(TokenType.COMMA)
+            parser.consume(TokenType.RPAREN, "Expected closing ')' after function call.")
         }
-        return new CallExpression(pos, left, args);
+        return CallExpression(pos, left, args)
     }
 
-    @Override
-    public int precedence() {
-            return Precedence.PRIMARY;
-        }
+    override val precedence: Int
+        get() = Precedence.PRIMARY
 }

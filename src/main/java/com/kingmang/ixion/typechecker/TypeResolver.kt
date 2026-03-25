@@ -1,90 +1,83 @@
-package com.kingmang.ixion.typechecker;
+package com.kingmang.ixion.typechecker
 
-import com.kingmang.ixion.runtime.*;
-import com.kingmang.ixion.runtime.CollectionUtil;
-import org.apache.commons.lang3.StringUtils;
+import com.kingmang.ixion.runtime.*
+import com.kingmang.ixion.runtime.CollectionUtil.IxListWrapper
+import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.Strings
 
-public class TypeResolver {
-
-    public static Object getValueFromString(String value, BuiltInType t) {
-        Object result;
-        switch (t) {
-            case BOOLEAN -> result = Boolean.valueOf(value);
-            case INT -> result = Integer.valueOf(value);
-            case FLOAT -> result = Float.valueOf(value);
-            case DOUBLE -> result = Double.valueOf(value);
-            case STRING -> {
-                value = StringUtils.removeStart(value, "\"");
-                value = StringUtils.removeEnd(value, "\"");
-                result = value;
+object TypeResolver {
+    fun getValueFromString(value: String, t: BuiltInType): Any? {
+        var value = value
+        val result: Any?
+        when (t) {
+            BuiltInType.BOOLEAN -> result = value.toBoolean()
+            BuiltInType.INT -> result = value.toInt()
+            BuiltInType.FLOAT -> result = value.toFloat()
+            BuiltInType.DOUBLE -> result = value.toDouble()
+            BuiltInType.STRING -> {
+                value = Strings.CS.removeStart(value, "\"")
+                value = Strings.CS.removeEnd(value, "\"")
+                result = value
             }
-            default -> throw new AssertionError("Objects not yet implemented!");
+
+            else -> throw AssertionError("Objects not yet implemented!")
         }
-        return result;
+        return result
     }
 
-    public static boolean typesMatch(IxType par, IxType arg) {
+    @JvmStatic
+    fun typesMatch(par: IxType, arg: IxType): Boolean {
         // union
-        if (par instanceof UnionType uPar && arg instanceof UnionType uArg) {
-            return uPar.types.containsAll(uArg.types) && uArg.types.containsAll(uPar.types);
+        when {
+            par is UnionType && arg is UnionType -> return par.types.containsAll(arg.types) && arg.types.containsAll(par.types)
+            par is UnionType && par.types.contains(arg) -> return true
+            arg is UnionType && arg.types.contains(par) -> return true
         }
-        if (par instanceof UnionType ua && ua.types.contains(arg)) return true;
-        if (arg instanceof UnionType ua && ua.types.contains(par)) return true;
 
         // any
-        var parTypeClass = par.getTypeClass();
-        var argTypeClass = arg.getTypeClass();
-        if ((parTypeClass != null && parTypeClass.equals(Object.class)) ||
-                (argTypeClass != null && argTypeClass.equals(Object.class))) {
-            return true;
+        val parTypeClass = par.typeClass
+        val argTypeClass = arg.typeClass
+        if ((parTypeClass != null && parTypeClass == Any::class.java) ||
+            (argTypeClass != null && argTypeClass == Any::class.java)
+        ) {
+            return true
         }
 
         // builtin
-        if (par instanceof BuiltInType bta && arg instanceof BuiltInType btb) {
-            return bta.equals(btb);
+        if (par is BuiltInType && arg is BuiltInType) {
+            return par == arg
         }
 
         // list
         if (isList(par) && isList(arg)) {
-            IxType parContentType = getContentType(par);
-            IxType argContentType = getContentType(arg);
-
-            if (parContentType == BuiltInType.ANY || argContentType == BuiltInType.ANY) {
-                return true;
-            }
-
-            return typesMatch(parContentType, argContentType);
+            val parContentType = getContentType(par)
+            if (parContentType === BuiltInType.ANY)
+                return true
+            val argContentType = getContentType(arg)
+            if (argContentType === BuiltInType.ANY)
+                return true
+            return typesMatch(parContentType, argContentType)
         }
 
-        // struct
-        if (arg instanceof StructType ast && par instanceof StructType pst) {
-            return ast.parameters.equals(pst.parameters) && ast.name.equals(pst.name);
+        return when {
+            // struct
+            arg is StructType   && par is StructType      -> arg.parameters == par.parameters && arg.name == par.name
+            // external
+            par is ExternalType && arg is ExternalType    -> par.name == arg.name
+            // other
+            isList(arg)     && par is ExternalType -> par.typeClass == IxListWrapper::class.java
+            isList(par)     && arg is ExternalType -> arg.typeClass == IxListWrapper::class.java
+            else -> false
         }
-
-        // external
-        if (par instanceof ExternalType && arg instanceof ExternalType) {
-            return par.getName().equals(arg.getName());
-        }
-
-
-        if (isList(arg) && par instanceof ExternalType extPar) {
-            return extPar.getTypeClass() == CollectionUtil.IxListWrapper.class;
-        }
-        if (isList(par) && arg instanceof ExternalType extArg) {
-            return extArg.getTypeClass() == CollectionUtil.IxListWrapper.class;
-        }
-
-        return false;
     }
 
-    private static boolean isList(IxType type) {
-        return type.getName().equals("java.util.List") || type instanceof ListType;
+    private fun isList(type: IxType): Boolean {
+        return type.name == "java.util.List" || type is ListType
     }
 
-    private static IxType getContentType(IxType type) {
-        if (type instanceof ListType(IxType contentType)) {
-            return contentType;
-        }
-        return BuiltInType.ANY;
+    private fun getContentType(type: IxType): IxType {
+        if (type is ListType)
+            return type.contentType
+        return BuiltInType.ANY
     }
 }

@@ -167,7 +167,7 @@ public class LexerImpl implements Lexer{
         String identifier = consumeIdentifier();
         TokenType tokenType = TokenType.IDENTIFIER;
 
-        TokenType keywordType = TokenType.find(identifier);
+        TokenType keywordType = TokenType.Companion.find(identifier);
         if (keywordType != null) {
             tokenType = keywordType;
         }
@@ -271,8 +271,8 @@ public class LexerImpl implements Lexer{
         char nextChar = peekNext();
         String twoCharOperator = String.valueOf(new char[]{currentChar, nextChar});
 
-        TokenType longToken = TokenType.find(twoCharOperator);
-        TokenType shortToken = TokenType.find(String.valueOf(currentChar));
+        TokenType longToken = TokenType.Companion.find(twoCharOperator);
+        TokenType shortToken = TokenType.Companion.find(String.valueOf(currentChar));
 
         if (longToken != null) {
             advance();

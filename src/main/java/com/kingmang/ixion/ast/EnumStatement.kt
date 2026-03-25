@@ -13,6 +13,4 @@ class EnumStatement(pos: Position?, @JvmField val name: Token, @JvmField val val
     override fun identifier(): String? {
         return name.source
     }
-
-
 }

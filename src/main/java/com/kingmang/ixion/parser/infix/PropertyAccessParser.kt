@@ -1,51 +1,42 @@
-package com.kingmang.ixion.parser.infix;
+package com.kingmang.ixion.parser.infix
 
-import com.kingmang.ixion.ast.EnumAccessExpression;
-import com.kingmang.ixion.ast.Expression;
-import com.kingmang.ixion.ast.IdentifierExpression;
-import com.kingmang.ixion.ast.PropertyAccessExpression;
-import com.kingmang.ixion.lexer.Token;
-import com.kingmang.ixion.lexer.TokenType;
-import com.kingmang.ixion.parser.Parser;
-import com.kingmang.ixion.parser.Precedence;
+import com.kingmang.ixion.ast.EnumAccessExpression
+import com.kingmang.ixion.ast.Expression
+import com.kingmang.ixion.ast.IdentifierExpression
+import com.kingmang.ixion.ast.PropertyAccessExpression
+import com.kingmang.ixion.lexer.Token
+import com.kingmang.ixion.lexer.TokenType
+import com.kingmang.ixion.parser.Parser
+import com.kingmang.ixion.parser.Precedence
 
-import java.util.ArrayList;
-import java.util.List;
+class PropertyAccessParser : InfixParselet {
+    override fun parse(parser: Parser, left: Expression, token: Token): Expression {
+        val pos = parser.pos
 
-import static com.kingmang.ixion.lexer.TokenType.IDENTIFIER;
-
-public record PropertyAccessParser() implements InfixParselet {
-
-    @Override
-    public Expression parse(Parser parser, Expression left, Token token) {
-        var pos = parser.getPos();
-
-        if (left instanceof IdentifierExpression) {
-            Token enumValueToken = parser.consume(IDENTIFIER, "Expected enum value after '.'");
-            return new EnumAccessExpression(
-                    pos,
-                    left,
-                    new IdentifierExpression(parser.getPos(), enumValueToken)
-            );
+        if (left is IdentifierExpression) {
+            val enumValueToken = parser.consume(TokenType.IDENTIFIER, "Expected enum value after '.'")
+            return EnumAccessExpression(
+                pos,
+                left,
+                IdentifierExpression(parser.pos, enumValueToken)
+            )
         }
 
-        List<IdentifierExpression> identifiers = new ArrayList<>();
-        var i = parser.consume();
-        identifiers.add(new IdentifierExpression(parser.getPos(), i));
+        val identifiers = ArrayList<IdentifierExpression?>()
+        var i = parser.consume()
+        identifiers.add(IdentifierExpression(parser.pos, i))
 
-        while (parser.peek().type() == TokenType.DOT) {
-            parser.consume();
-            if (parser.peek().type() == IDENTIFIER) {
-                i = parser.consume();
-                identifiers.add(new IdentifierExpression(parser.getPos(), i));
+        while (parser.peek().type == TokenType.DOT) {
+            parser.consume()
+            if (parser.peek().type == TokenType.IDENTIFIER) {
+                i = parser.consume()
+                identifiers.add(IdentifierExpression(parser.pos, i))
             }
         }
 
-        return new PropertyAccessExpression(pos, left, identifiers);
+        return PropertyAccessExpression(pos, left, identifiers)
     }
 
-    @Override
-    public int precedence() {
-        return Precedence.PREFIX;
-    }
+    override val precedence: Int
+        get() = Precedence.PREFIX
 }

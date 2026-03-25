@@ -9,7 +9,7 @@ import com.kingmang.ixion.exception.*;
 import com.kingmang.ixion.lexer.Position;
 import com.kingmang.ixion.lexer.TokenType;
 import com.kingmang.ixion.runtime.*;
-import org.javatuples.Pair;
+import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -54,7 +54,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      */
     @Override
     public Optional<IxType> visitTypeAlias(TypeAliasStatement statement) {
-        var a = currentContext.getVariable(statement.identifier.source());
+        var a = currentContext.getVariable(statement.identifier.getSource());
 
         var resolvedTypes = new HashSet<IxType>();
         if (a instanceof UnionType ut) {
@@ -79,7 +79,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         switch (expr.left) {
             case IdentifierExpression id -> {
                 if (expr.left.getRealType() != expr.right.getRealType()) {
-                    new BadAssignmentException().send(ixApi, file, expr, id.identifier.source());
+                    new BadAssignmentException().send(ixApi, file, expr, id.identifier.getSource());
                 }
             }
             case PropertyAccessExpression pa -> {
@@ -118,27 +118,27 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         }
 
         if (t1.get() == BuiltInType.ANY || t2.get() == BuiltInType.ANY) {
-            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.source());
+            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
             return Optional.empty();
         }
 
         var totalType = t1.get();
 
-        switch (expr.operator.type()) {
+        switch (expr.operator.getType()) {
             case ADD, SUB, MUL, DIV, MOD -> {
                 if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
-                    totalType = BuiltInType.widen(bt1, bt2);
+                    totalType = BuiltInType.Companion.widen(bt1, bt2);
                 } else {
-                    new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.source());
+                    new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
                 }
             }
             case EQUAL, NOTEQUAL, LT, GT, LE, GE -> {
                 if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
-                    if (expr.operator.type() != TokenType.EQUAL && expr.operator.type() != TokenType.NOTEQUAL) {
+                    if (expr.operator.getType() != TokenType.EQUAL && expr.operator.getType() != TokenType.NOTEQUAL) {
                         if (bt1 == BuiltInType.STRING || bt2 == BuiltInType.STRING) {
-                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.source());
+                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
                         } else if (bt1 == BuiltInType.BOOLEAN || bt2 == BuiltInType.BOOLEAN) {
-                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.source());
+                            new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
 
                         }
                     }
@@ -148,7 +148,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
             case AND, OR, XOR -> {
                 if (t1.get() instanceof BuiltInType bt1 && t2.get() instanceof BuiltInType bt2) {
                     if (bt1 != BuiltInType.BOOLEAN || bt2 != BuiltInType.BOOLEAN) {
-                        new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.source());
+                        new CannotApplyOperatorException().send(ixApi, file, expr, expr.operator.getSource());
                     }
                     totalType = BuiltInType.BOOLEAN;
                 }
@@ -188,34 +188,34 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         var e = expr.item.accept(this);
         if (e.isEmpty())
             IxApi.exit("Type checking failed to resolve function in ["
-                    + expr.pos().line() + ":" + expr.pos().col()
+                    + expr.getPosition().getLine() + ":" + expr.getPosition().getCol()
                     + "]", 95);
 
         var t = e.orElseThrow();
         if (t instanceof StructType st) {
-            if (st.parameters.size() != expr.arguments.size()) {
-                var params = st.parameters.stream().map(s -> s.getValue1().getName()).collect(Collectors.joining(", "));
-                new FunctionSignatureMismatchException().send(ixApi, file, expr.item, st.name);
+            if (st.getParameters().size() != expr.arguments.size()) {
+                var params = st.getParameters().stream().map(s -> s.getSecond().getName()).collect(Collectors.joining(", "));
+                new FunctionSignatureMismatchException().send(ixApi, file, expr.item, st.getName());
                 return Optional.empty();
             }
             updateUnknownParameters(expr, st);
 
-            CollectionUtil.zip(st.parameters, expr.arguments, (param, arg) -> {
+            CollectionUtil.zip(st.getParameters(), expr.arguments, (param, arg) -> {
                 var at = arg.accept(this);
                 at.ifPresent(type -> typecheckCallParameters(param, arg, type));
             });
         }
 
         if (t instanceof DefType ft) {
-            var rt = ft.returnType;
+            var rt = ft.getReturnType();
             if (ft.hasGenerics()) {
 
                 var specialization = ft.buildSpecialization(expr.arguments);
 
-                ft.specializations.add(specialization);
+                ft.getSpecializations().add(specialization);
 
-                if (rt instanceof GenericType(String key)) {
-                    rt = specialization.get(key);
+                if (rt instanceof GenericType) {
+                    rt = specialization.get(((GenericType) rt).getKey());
                 }
             }
 
@@ -251,9 +251,9 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         if (!functionStack.isEmpty()) {
             var functionType = functionStack.peek();
 
-            if (functionType.returnType instanceof ListType) {
-                emptyList.setRealType(functionType.returnType);
-                return Optional.of(functionType.returnType);
+            if (functionType.getReturnType() instanceof ListType) {
+                emptyList.setRealType(functionType.getReturnType());
+                return Optional.of(functionType.getReturnType());
             }
         }
         new TypeNotResolvedException().send(ixApi, file, emptyList, "Cannot determine type of empty list");
@@ -297,12 +297,12 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         if (b.isPresent()) {
             switch (b.get()) {
                 case ExternalType et -> {
-                    if (et.foundClass.getName().equals("java.util.Iterator")) {
-                        currentContext.setVariableType(statement.name.source(), BuiltInType.INT);
+                    if (et.getFoundClass().getName().equals("java.util.Iterator")) {
+                        currentContext.setVariableType(statement.name.getSource(), BuiltInType.INT);
                     }
                 }
                 case ListType lt -> {
-                    currentContext.setVariableType(statement.name.source(), lt.contentType());
+                    currentContext.setVariableType(statement.name.getSource(), lt.getContentType());
                 }
                 default -> new NotIterableException().send(ixApi, file, statement.expression, b.get().getName());
             }
@@ -323,45 +323,45 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
     @Override
     public Optional<IxType> visitFunctionStmt(DefStatement statement) {
 
-        var funcType = currentContext.getVariableTyped(statement.name.source(), DefType.class);
+        var funcType = currentContext.getVariableTyped(statement.name.getSource(), DefType.class);
         if (funcType != null) {
             functionStack.add(funcType);
             var childEnvironment = statement.body.context;
 
-            var parametersBefore = funcType.parameters;
+            var parametersBefore = funcType.getParameters();
             var parametersAfter = new ArrayList<Pair<String, IxType>>();
 
             for (var param : parametersBefore) {
-                if (param.getValue1() instanceof UnknownType ut) {
-                    var attempt = currentContext.getVariable(ut.typeName);
+                if (param.getSecond() instanceof UnknownType ut) {
+                    var attempt = currentContext.getVariable(ut.getTypeName());
                     if (attempt != null) {
-                        childEnvironment.setVariableType(param.getValue0(), attempt);
-                        var nt = param.setAt1(attempt);
+                        childEnvironment.setVariableType(param.getFirst(), attempt);
+                        var nt = new Pair<>(param.getFirst(), attempt);
                         parametersAfter.add(nt);
                     } else {
-                        new IdentifierNotFoundException().send(ixApi, file, statement, ut.typeName);
+                        new IdentifierNotFoundException().send(ixApi, file, statement, ut.getTypeName());
                         parametersAfter.add(param);
                     }
-                } else if (param.getValue1() instanceof UnionType ut) {
+                } else if (param.getSecond() instanceof UnionType ut) {
                     parametersAfter.add(param);
                     var resolvedTypes = new HashSet<IxType>();
                     extractedMethodForUnions(resolvedTypes, ut, statement);
 
-                    currentContext.setVariableType(param.getValue0(), ut);
+                    currentContext.setVariableType(param.getFirst(), ut);
                 } else {
                     parametersAfter.add(param);
 
                 }
             }
-            funcType.parameters.clear();
-            funcType.parameters.addAll(parametersAfter);
+            funcType.getParameters().clear();
+            funcType.getParameters().addAll(parametersAfter);
 
-            if (funcType.returnType instanceof UnknownType ut) {
-                var attempt = currentContext.getVariable(ut.typeName);
+            if (funcType.getReturnType() instanceof UnknownType ut) {
+                var attempt = currentContext.getVariable(ut.getTypeName());
                 if (attempt != null) {
-                    funcType.returnType = attempt;
+                    funcType.setReturnType(attempt);
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, statement, ut.typeName);
+                    new IdentifierNotFoundException().send(ixApi, file, statement, ut.getTypeName());
                 }
             }
 
@@ -369,7 +369,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
 
             statement.body.accept(this);
 
-            if (!funcType.hasReturn2) {
+            if (!funcType.getHasReturn2()) {
                 var returnStmt = new ReturnStatement(
                         new Position(0, 0),
                         new EmptyExpression(new Position(0, 0))
@@ -402,17 +402,17 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
     @NotNull
     @Override
     public Optional<IxType> visitIdentifierExpr(IdentifierExpression expr) {
-        var t = currentContext.getVariable(expr.identifier.source());
+        var t = currentContext.getVariable(expr.identifier.getSource());
         if (t != null) {
             if (t instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.typeName);
+                var attempt = currentContext.getVariable(ukt.getTypeName());
                 if (attempt != null) {
                     t = attempt;
                 }
             }
             expr.setRealType(t);
         } else {
-            new IdentifierNotFoundException().send(ixApi, file, expr, expr.identifier.source());
+            new IdentifierNotFoundException().send(ixApi, file, expr, expr.identifier.getSource());
         }
         return Optional.ofNullable(t);
     }
@@ -493,13 +493,13 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         statement.expression.accept(this);
 
         if (statement.expression.getRealType() instanceof UnionType ut) {
-            var typesToCover = new HashSet<>(ut.types);
+            var typesToCover = new HashSet<>(ut.getTypes());
             statement.cases.forEach((keyTypeStmt, pair) -> {
                 String id = pair.getValue0();
                 BlockStatement block = pair.getValue1();
                 var caseType = statement.types.get(keyTypeStmt);
                 if (caseType instanceof UnknownType ukt) {
-                    var attempt = currentContext.getVariable(ukt.typeName);
+                    var attempt = currentContext.getVariable(ukt.getTypeName());
                     if (attempt != null) {
                         caseType = attempt;
                     }
@@ -549,7 +549,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         expr.setRealType(expr.expression.accept(this).get());
 
         if (!(expr.getRealType() instanceof BuiltInType bt && bt.isNumeric())) {
-            new CannotPostfixException().send(ixApi, file, expr.expression, expr.operator.source());
+            new CannotPostfixException().send(ixApi, file, expr.expression, expr.operator.getSource());
         }
         return Optional.empty();
     }
@@ -580,13 +580,13 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
             StructType pointer;
             IxType result = null;
             if (exprType instanceof MonomorphizedStruct mt) {
-                pointer = mt.struct;
+                pointer = mt.getStruct();
                 typeChain.add(pointer);
                 result = pointer;
 
                 result = getTempMSTType(expr, typeChain, pointer, result);
                 if (result instanceof GenericType gt) {
-                    result = mt.resolved.get(gt.key());
+                    result = mt.getResolved().get(gt.getKey());
                 }
             } else if (exprType instanceof StructType st) {
                 pointer = st;
@@ -629,30 +629,30 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
                 var newType = t.get();
                 var functionType = functionStack.peek();
 
-                if (statement.expression instanceof EmptyListExpression && functionType.returnType instanceof ListType) {
-                    functionType.hasReturn2 = true;
+                if (statement.expression instanceof EmptyListExpression && functionType.getReturnType() instanceof ListType) {
+                    functionType.setHasReturn2(true);
                     return Optional.empty();
                 }
 
-                if (TypeResolver.typesMatch(functionType.returnType, newType)) {
+                if (TypeResolver.typesMatch(functionType.getReturnType(), newType)) {
                 }
-                else if (functionType.returnType instanceof UnionType ut) {
-                    if (!ut.types.contains(newType)) {
+                else if (functionType.getReturnType() instanceof UnionType ut) {
+                    if (!ut.getTypes().contains(newType)) {
                         new ParameterTypeMismatchException().send(ixApi, file, statement.expression, String.valueOf(newType));
                     }
                 }
-                else if (functionType.returnType == BuiltInType.VOID) {
+                else if (functionType.getReturnType() == BuiltInType.VOID) {
                     if (newType != BuiltInType.VOID) {
-                        new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.name);
+                        new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.getName());
                     }
                 }
                 else {
-                    new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.name);
+                    new ReturnTypeMismatchException().send(ixApi, file, statement, functionType.getName());
                 }
             }
         }
 
-        functionStack.peek().hasReturn2 = true;
+        functionStack.peek().setHasReturn2(true);;
         return Optional.empty();
     }
 
@@ -662,27 +662,27 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      */
     @Override
     public Optional<IxType> visitStruct(StructStatement statement) {
-        var structType = currentContext.getVariableTyped(statement.name.source(), StructType.class);
+        var structType = currentContext.getVariableTyped(statement.name.getSource(), StructType.class);
         if (structType != null) {
             var parametersAfter = new ArrayList<Pair<String, IxType>>();
-            CollectionUtil.zip(statement.fields, structType.parameters, (a, b) -> {
-                var bType = b.getValue1();
+            CollectionUtil.zip(statement.fields, structType.getParameters(), (a, b) -> {
+                var bType = b.getSecond();
                 if (bType instanceof UnknownType ut) {
-                    var attempt = currentContext.getVariable(ut.typeName);
+                    var attempt = currentContext.getVariable(ut.getTypeName());
                     if (attempt != null) {
-                        parametersAfter.add(b.setAt1(attempt));
-                    } else if (structType.generics.contains(ut.typeName)) {
-                        parametersAfter.add(b.setAt1(new GenericType(ut.typeName)));
+                        parametersAfter.add(new Pair<>(b.getFirst(), attempt));
+                    } else if (structType.getGenerics().contains(ut.getTypeName())) {
+                        parametersAfter.add(new Pair<>(b.getFirst(), new GenericType(ut.getTypeName())));
                     } else {
-                        new IdentifierNotFoundException().send(ixApi, file, a, ut.typeName);
+                        new IdentifierNotFoundException().send(ixApi, file, a, ut.getTypeName());
                         parametersAfter.add(b);
                     }
                 } else {
                     parametersAfter.add(b);
                 }
             });
-            structType.parameters.clear();
-            structType.parameters.addAll(parametersAfter);
+            structType.getParameters().clear();
+            structType.getParameters().addAll(parametersAfter);
 
         }
 
@@ -710,9 +710,9 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         var t = expr.accept(this);
 
         if (t.isPresent()) {
-            currentContext.setVariableType(statement.name.source(), t.get());
+            currentContext.setVariableType(statement.name.getSource(), t.get());
         } else {
-            new TypeNotResolvedException().send(ixApi, file, expr, statement.name.source());
+            new TypeNotResolvedException().send(ixApi, file, expr, statement.name.getSource());
         }
         return Optional.empty();
     }
@@ -742,19 +742,19 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      * @param node AST node for error reporting
      */
     private void extractedMethodForUnions(HashSet<IxType> resolvedTypes, UnionType ut, Statement node) {
-        for (var type : ut.types) {
+        for (var type : ut.getTypes()) {
             if (type instanceof UnknownType ukt) {
-                var attempt = currentContext.getVariable(ukt.typeName);
+                var attempt = currentContext.getVariable(ukt.getTypeName());
                 if (attempt != null) {
                     resolvedTypes.add(attempt);
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, node, ukt.typeName);
+                    new IdentifierNotFoundException().send(ixApi, file, node, ukt.getTypeName());
                 }
             } else {
                 resolvedTypes.add(type);
             }
         }
-        ut.types = resolvedTypes;
+        ut.setTypes(resolvedTypes);
     }
 
     /**
@@ -767,9 +767,9 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      */
     private IxType getTempMSTType(PropertyAccessExpression expr, ArrayList<IxType> typeChain, StructType pointer, IxType result) {
         for (IdentifierExpression identifier : expr.identifiers) {
-            var foundField = pointer.parameters.stream().filter(i -> i.getValue0().equals(identifier.identifier.source())).findAny();
+            var foundField = pointer.getParameters().stream().filter(i -> i.getFirst().equals(identifier.identifier.getSource())).findAny();
             if (foundField.isPresent()) {
-                var pointerCandidate = foundField.get().getValue1();
+                var pointerCandidate = foundField.get().getSecond();
                 if (pointerCandidate instanceof StructType pst) {
                     pointer = pst;
                     typeChain.add(pointer);
@@ -781,7 +781,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
                 }
 
             } else {
-                new FieldNotPresentException().send(ixApi, file, identifier, identifier.identifier.source());
+                new FieldNotPresentException().send(ixApi, file, identifier, identifier.identifier.getSource());
                 break;
             }
         }
@@ -798,9 +798,9 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
         if (argType == BuiltInType.VOID) {
             new VoidUsageException().send(ixApi, file, arg);
         }
-        if (!TypeResolver.typesMatch(param.getValue1(), argType)) {
+        if (!TypeResolver.typesMatch(param.getSecond(), argType)) {
             new ParameterTypeMismatchException().send(ixApi, file, arg, argType.getName());
-            TypeResolver.typesMatch(param.getValue1(), argType);
+            TypeResolver.typesMatch(param.getSecond(), argType);
             arg.accept(this);
         } else {
             arg.setRealType(argType);
@@ -814,13 +814,13 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
      */
     private void updateUnknownParameters(CallExpression expr, StructType structType) {
         var parametersAfter = new ArrayList<Pair<String, IxType>>();
-        CollectionUtil.zip(structType.parameters, expr.arguments, (param, arg) -> {
-            if (param.getValue1() instanceof UnknownType ut) {
-                var attempt = currentContext.getVariable(ut.typeName);
+        CollectionUtil.zip(structType.getParameters(), expr.arguments, (param, arg) -> {
+            if (param.getSecond() instanceof UnknownType ut) {
+                var attempt = currentContext.getVariable(ut.getTypeName());
                 if (attempt != null) {
-                    parametersAfter.add(param.setAt1(attempt));
+                    parametersAfter.add(new Pair<>(param.getFirst(), attempt));
                 } else {
-                    new IdentifierNotFoundException().send(ixApi, file, arg, ut.typeName);
+                    new IdentifierNotFoundException().send(ixApi, file, arg, ut.getTypeName());
                     parametersAfter.add(param);
                 }
             } else {
@@ -829,7 +829,7 @@ public class TypeCheckVisitor implements Visitor<Optional<IxType>> {
             }
         });
 
-        structType.parameters.clear();
-        structType.parameters.addAll(parametersAfter);
+        structType.getParameters().clear();
+        structType.getParameters().addAll(parametersAfter);
     }
 }

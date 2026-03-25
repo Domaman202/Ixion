@@ -1,3 +1,3 @@
-package com.kingmang.ixion;
+package com.kingmang.ixion
 
-public interface Visitor<R> extends StatementVisitor<R>, ExprVisitor<R> {}
+interface Visitor<R> : StatementVisitor<R?>, ExprVisitor<R?>

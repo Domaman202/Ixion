@@ -1,64 +1,43 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.stream.Collectors
 
-public class MonomorphizedStruct implements IxType {
-	public final StructType struct;
-	public final Map<String, IxType> resolved = new HashMap<>();
+class MonomorphizedStruct(val struct: StructType) : IxType {
+	val resolved: MutableMap<String?, IxType?> = HashMap()
 
-	public MonomorphizedStruct(StructType struct) {
-		this.struct = struct;
-	}
+    override val defaultValue: Any?
+        get() = struct.defaultValue
 
-	@Override
-	public Object getDefaultValue() {
-		return struct.getDefaultValue();
-	}
+    override val descriptor: String?
+        get() = struct.descriptor
 
-	@Override
-	public String getDescriptor() {
-		return struct.getDescriptor();
-	}
+    override val internalName: String?
+        get() = struct.internalName
 
-	@Override
-	public String getInternalName() {
-		return struct.getInternalName();
-	}
+    override val loadVariableOpcode: Int
+        get() = struct.loadVariableOpcode
 
-	@Override
-	public int getLoadVariableOpcode() {
-		return struct.getLoadVariableOpcode();
-	}
+    override val name: String
+        get() = struct.name
 
-	@Override
-	public String getName() {
-		return struct.getName();
-	}
+    override val returnOpcode: Int
+        get() = struct.returnOpcode
 
-	@Override
-	public int getReturnOpcode() {
-		return struct.getReturnOpcode();
-	}
+    override val typeClass: Class<*>?
+        get() = struct.typeClass
 
-	@Override
-	public Class<?> getTypeClass() {
-		return struct.getTypeClass();
-	}
+    override val isNumeric: Boolean
+        get() = struct.isNumeric
 
-	@Override
-	public boolean isNumeric() {
-		return struct.isNumeric();
-	}
+    override fun kind(): String {
+        return struct.kind()
+    }
 
-	@Override
-	public String kind() {
-		return struct.kind();
-	}
-
-	@Override
-	public String toString() {
-		return "type " + getName() + " = struct" + "[" + struct.generics.stream().map(g -> g + "=" + resolved.get(g)).collect(Collectors.joining(",")) + "]";
-	}
+    override fun toString(): String {
+        return "type $name = struct[" +
+                struct.generics
+                    .stream()
+                    .map { g: String? -> g + "=" + resolved[g] }
+                    .collect(Collectors.joining(",")) + "]"
+    }
 }

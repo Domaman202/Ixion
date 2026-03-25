@@ -56,7 +56,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     @Override
     public Optional<String> visitAssignExpr(AssignExpression expr) {
         if (expr.left instanceof IdentifierExpression id) {
-            print(id.identifier.source() + " = ");
+            print(id.identifier.getSource() + " = ");
             expr.right.accept(this);
         } else if (expr.left instanceof PropertyAccessExpression pa) {
             pa.accept(this);
@@ -78,7 +78,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     public Optional<String> visitBinaryExpr(BinaryExpression expr) {
         expr.left.accept(this);
 
-        String operator = switch (expr.operator.type()) {
+        String operator = switch (expr.operator.getType()) {
             case AND -> " && ";
             case OR -> " || ";
             case EQUAL -> " == ";
@@ -93,7 +93,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
             case DIV -> " / ";
             case MOD -> " % ";
             case XOR -> " ^ ";
-            default -> " " + expr.operator.source() + " ";
+            default -> " " + expr.operator.getSource() + " ";
         };
 
         print(operator);
@@ -105,18 +105,18 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     @Override
     public Optional<String> visitCall(CallExpression expr) {
         if (expr.item instanceof IdentifierExpression identifier) {
-            expr.item.setRealType(currentContext.getVariable(identifier.identifier.source()));
+            expr.item.setRealType(currentContext.getVariable(identifier.identifier.getSource()));
         }
 
         if (expr.item.getRealType() instanceof DefType callType) {
-            if (callType.glue) {
-                String owner = callType.owner.replace('/', '.');
-                String name = callType.name;
-                if (callType.isPrefixed) name = "_" + name;
+            if (callType.getGlue()) {
+                String owner = callType.getOwner().replace('/', '.');
+                String name = callType.getName();
+                if (callType.isPrefixed()) name = "_" + name;
 
                 print(owner + "." + name + "(");
             } else {
-                String name = "_" + callType.name;
+                String name = "_" + callType.getName();
 
                 if (callType.external != null && !callType.external.equals(source)) {
                     String className = IxApi.getClassName(callType.external);
@@ -132,7 +132,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
             }
             print(")");
         } else if (expr.item.getRealType() instanceof StructType st) {
-            print("new " + st.name + "(");
+            print("new " + st.getName() + "(");
             for (int i = 0; i < expr.arguments.size(); i++) {
                 if (i > 0) print(", ");
                 expr.arguments.get(i).accept(this);
@@ -177,7 +177,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     @NotNull
     @Override
     public Optional<String> visitIdentifierExpr(IdentifierExpression expr) {
-        print(expr.identifier.source());
+        print(expr.identifier.getSource());
         return Optional.empty();
     }
 
@@ -196,29 +196,29 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     public Optional<String> visitLiteralExpr(LiteralExpression expr) {
         if (expr.getRealType() instanceof BuiltInType bt) {
             switch (bt) {
-                case STRING -> print("\"" + expr.literal.source().replace("\"", "\\\"") + "\"");
+                case STRING -> print("\"" + expr.literal.getSource().replace("\"", "\\\"") + "\"");
                 case CHAR -> {
                     String escapedChar = getEscapedChar(expr);
                     ;
                     print("'" + escapedChar + "'");
                 }
-                default -> print(expr.literal.source());
+                default -> print(expr.literal.getSource());
             }
         } else {
-            switch (expr.literal.type()) {
+            switch (expr.literal.getType()) {
                 case CHAR -> {
                     String escapedChar = getEscapedChar(expr);
                     print("'" + escapedChar + "'");
                 }
-                case STRING -> print("\"" + expr.literal.source().replace("\"", "\\\"") + "\"");
-                default -> print(expr.literal.source());
+                case STRING -> print("\"" + expr.literal.getSource().replace("\"", "\\\"") + "\"");
+                default -> print(expr.literal.getSource());
             }
         }
         return Optional.empty();
     }
 
     private static String getEscapedChar(LiteralExpression expr) {
-        char charValue = expr.literal.source().charAt(0);
+        char charValue = expr.literal.getSource().charAt(0);
         return switch (charValue) {
             case '\n' -> "\\n";
             case '\t' -> "\\t";
@@ -265,14 +265,14 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     @Override
     public Optional<String> visitPostfixExpr(PostfixExpression expr) {
         expr.expression.accept(this);
-        print(expr.operator.source());
+        print(expr.operator.getSource());
         return Optional.empty();
     }
 
     @NotNull
     @Override
     public Optional<String> visitPrefix(PrefixExpression expr) {
-        print(expr.operator.source());
+        print(expr.operator.getSource());
         expr.right.accept(this);
         return Optional.empty();
     }
@@ -282,7 +282,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     public Optional<String> visitPropertyAccess(PropertyAccessExpression expr) {
         expr.expression.accept(this);
         for (var identifier : expr.identifiers) {
-            print("." + identifier.identifier.source());
+            print("." + identifier.identifier.getSource());
         }
         return Optional.empty();
     }
@@ -295,8 +295,8 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
 
     @Override
     public Optional<String> visitEnumAccess(EnumAccessExpression expression) {
-        String enumName = ((IdentifierExpression)expression.enumType).identifier.source();
-        String enumValue = expression.enumValue.identifier.source();
+        String enumName = ((IdentifierExpression)expression.enumType).identifier.getSource();
+        String enumValue = expression.enumValue.identifier.getSource();
         print(enumName + "." + enumValue);
         return Optional.empty();
     }
@@ -321,10 +321,10 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
     @Override
     public Optional<String> visitEnum(EnumStatement statement) {
         indent();
-        print("enum " + statement.name.source() + " {");
+        print("enum " + statement.name.getSource() + " {");
         for (int i = 0; i < statement.values.size(); i++) {
             if (i > 0) print(", ");
-            print(statement.values.get(i).source());
+            print(statement.values.get(i).getSource());
         }
         println("}");
         return Optional.empty();
@@ -348,12 +348,13 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
         indent();
 
         IxType elementType = BuiltInType.ANY;
-        if (statement.expression.getRealType() instanceof ListType(IxType contentType)) {
-            elementType = contentType;
+        IxType realType = statement.expression.getRealType();
+        if (realType instanceof ListType) {
+            elementType = ((ListType) realType).getContentType();
         } else if (statement.expression instanceof IdentifierExpression idExpr) {
-            var varType = currentContext.getVariable(idExpr.identifier.source());
-            if (varType instanceof ListType(IxType contentType)) {
-                elementType = contentType;
+            var varType = currentContext.getVariable(idExpr.identifier.getSource());
+            if (varType instanceof ListType) {
+                elementType = ((ListType) varType).getContentType();
             }
         }
 
@@ -367,7 +368,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
 
             indentLevel++;
             indent();
-            print(javaElementType + " " + statement.name.source() + " = ");
+            print(javaElementType + " " + statement.name.getSource() + " = ");
             switch (builtIn) {
                 case INT -> print("iter.next().intValue()");
                 case FLOAT -> print("iter.next().floatValue()");
@@ -378,7 +379,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
             println(";");
 
         } else {
-            print("for (" + javaElementType + " " + statement.name.source() + " : ");
+            print("for (" + javaElementType + " " + statement.name.getSource() + " : ");
             statement.expression.accept(this);
             println(") {");
             indentLevel++;
@@ -394,26 +395,26 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
 
     @Override
     public Optional<String> visitFunctionStmt(DefStatement statement) {
-        var funcType = currentContext.getVariableTyped(statement.name.source(), DefType.class);
+        var funcType = currentContext.getVariableTyped(statement.name.getSource(), DefType.class);
         functionStack.push(funcType);
         localMaps.put(funcType, new HashMap<>());
 
         indent();
         print("public static ");
 
-        if (funcType.name.equals("main")) {
+        if (funcType.getName().equals("main")) {
             print("void main(String[] args)");
         } else {
-            String returnType = getJavaTypeName(funcType.returnType);
-            String functionName = funcType.glue ? funcType.name : "_" + funcType.name;
+            String returnType = getJavaTypeName(funcType.getReturnType());
+            String functionName = funcType.getGlue() ? funcType.getName() : "_" + funcType.getName();
 
             print(returnType + " " + functionName + "(");
 
-            for (int i = 0; i < funcType.parameters.size(); i++) {
-                var param = funcType.parameters.get(i);
+            for (int i = 0; i < funcType.getParameters().size(); i++) {
+                var param = funcType.getParameters().get(i);
                 if (i > 0) print(", ");
-                String paramType = getJavaTypeName(param.getValue1());
-                print(paramType + " " + param.getValue0());
+                String paramType = getJavaTypeName(param.getSecond());
+                print(paramType + " " + param.getFirst());
             }
             print(")");
         }
@@ -423,9 +424,9 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
         currentContext = statement.body.context;
         statement.body.accept(this);
 
-        if (!funcType.name.equals("main") && !hasReturnStatement(statement.body) && !funcType.returnType.equals(BuiltInType.VOID)) {
+        if (!funcType.getName().equals("main") && !hasReturnStatement(statement.body) && !funcType.getReturnType().equals(BuiltInType.VOID)) {
             indent();
-            String defaultValue = getDefaultValue(funcType.returnType);
+            String defaultValue = getDefaultValue(funcType.getReturnType());
             println("return " + defaultValue + ";");
         }
 
@@ -482,7 +483,7 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
                 };
             }
             case ListType listType -> {
-                String elementType = getWrapperTypeName(listType.contentType());
+                String elementType = getWrapperTypeName(listType.getContentType());
                 return "java.util.List<" + elementType + ">";
             }
             default -> {
@@ -601,32 +602,32 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
 
     @Override
     public Optional<String> visitStruct(StructStatement statement) {
-        var structType = currentContext.getVariableTyped(statement.name.source(), StructType.class);
+        var structType = currentContext.getVariableTyped(statement.name.getSource(), StructType.class);
 
-        println("public static class " + structType.name + " {");
+        println("public static class " + structType.getName() + " {");
 
         indentLevel++;
-        for (var pair : structType.parameters) {
-            String fieldName = pair.getValue0();
-            IxType fieldType = pair.getValue1();
+        for (var pair : structType.getParameters()) {
+            String fieldName = pair.getFirst();
+            IxType fieldType = pair.getSecond();
             String javaType = getJavaTypeName(fieldType);
             println("public " + javaType + " " + fieldName + ";");
         }
 
         println("");
-        print("public " + structType.name + "(");
+        print("public " + structType.getName() + "(");
 
-        for (int i = 0; i < structType.parameters.size(); i++) {
-            var param = structType.parameters.get(i);
+        for (int i = 0; i < structType.getParameters().size(); i++) {
+            var param = structType.getParameters().get(i);
             if (i > 0) print(", ");
-            String javaType = getJavaTypeName(param.getValue1());
-            print(javaType + " " + param.getValue0());
+            String javaType = getJavaTypeName(param.getSecond());
+            print(javaType + " " + param.getFirst());
         }
         println(") {");
 
         indentLevel++;
-        for (var param : structType.parameters) {
-            println("this." + param.getValue0() + " = " + param.getValue0() + ";");
+        for (var param : structType.getParameters()) {
+            println("this." + param.getFirst() + " = " + param.getFirst() + ";");
         }
         indentLevel--;
         println("}");
@@ -635,10 +636,10 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
         println("@Override");
         println("public String toString() {");
         indentLevel++;
-        print("return \"" + structType.name + "{\" + ");
-        for (int i = 0; i < structType.parameters.size(); i++) {
-            var param = structType.parameters.get(i);
-            String fieldName = param.getValue0();
+        print("return \"" + structType.getName() + "{\" + ");
+        for (int i = 0; i < structType.getParameters().size(); i++) {
+            var param = structType.getParameters().get(i);
+            String fieldName = param.getFirst();
             if (i > 0) print(" + \", \" + ");
             print("\"" + fieldName + "=\" + " + fieldName);
         }
@@ -706,12 +707,12 @@ public class JavaCodegenVisitor implements Visitor<Optional<String>> {
                 case ANY -> "Object";
             };
         } else if (type instanceof ListType listType) {
-            String elementType = getWrapperTypeName(listType.contentType());
+            String elementType = getWrapperTypeName(listType.getContentType());
             return "java.util.List<" + elementType + ">";
         } else if (type instanceof UnionType) {
             return "Object";
         } else if (type instanceof StructType structType) {
-            return structType.name;
+            return structType.getName();
         }
         return type.getName();
     }

@@ -1,18 +1,14 @@
-package com.kingmang.ixion.exception;
+package com.kingmang.ixion.exception
 
-import com.kingmang.ixion.api.IxApi;
+import com.kingmang.ixion.api.IxApi.Companion.exit
 
-public class Panic {
-
-    private final String R = "\u001B[31m";
-    private final String RESET = "\u001B[0m";
-    private final String message;
-
-    public Panic(String message){
-        this.message = message;
+class Panic(private val message: String?) {
+    companion object {
+        private const val R = "\u001B[31m"
+        private const val RESET = "\u001B[0m"
     }
 
-    public void send(){
-        IxApi.exit(R + ("panic: " + message) + RESET, 1);
+    fun send() {
+        exit(R + ("panic: $message") + RESET, 1)
     }
 }

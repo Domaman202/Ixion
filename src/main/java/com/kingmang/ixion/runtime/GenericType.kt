@@ -1,51 +1,31 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-public record GenericType(String key) implements IxType {
+data class GenericType(val key: String?) : IxType {
+    override val defaultValue: Any?
+        get() = null
 
+    override val descriptor: String
+        get() = "Ljava/lang/Object;"
 
-    @Override
-    public Object getDefaultValue() {
-        return null;
-    }
+    override val internalName: String?
+        get() = key
 
-    @Override
-    public String getDescriptor() {
-        return "Ljava/lang/Object;";
-    }
+    override val loadVariableOpcode: Int
+        get() = throw IllegalCallerException("Don't use ALOAD on Generic Types directly. Specialization required.")
 
-    @Override
-    public String getInternalName() {
-        return key;
-    }
+    override val name: String?
+        get() = null
 
-    @Override
-    public int getLoadVariableOpcode() {
-        throw new IllegalCallerException("Don't use ALOAD on Generic Types directly. Specialization required.");
-    }
+    override val returnOpcode: Int
+        get() = throw IllegalCallerException("Don't use ARETURN on Generic Types directly. Specialization required.")
 
+    override val typeClass: Class<*>
+        get() = Any::class.java
 
-    @Override
-    public String getName() {
-        return null;
-    }
+    override val isNumeric: Boolean
+        get() = false
 
-    @Override
-    public int getReturnOpcode() {
-        throw new IllegalCallerException("Don't use ARETURN on Generic Types directly. Specialization required.");
-    }
-
-    @Override
-    public Class<?> getTypeClass() {
-        return Object.class;
-    }
-
-    @Override
-    public boolean isNumeric() {
-        return false;
-    }
-
-    @Override
-    public String kind() {
-        return null;
+    override fun kind(): String? {
+        return null
     }
 }

@@ -1,76 +1,64 @@
-package com.kingmang.ixion.modules;
+package com.kingmang.ixion.modules
 
-import com.kingmang.ixion.runtime.BuiltInType;
-import com.kingmang.ixion.runtime.DefType;
-import com.kingmang.ixion.runtime.ExternalType;
-import com.kingmang.ixion.runtime.IxType;
-import com.kingmang.ixion.typechecker.TypeUtils;
-import org.javatuples.Pair;
+import com.kingmang.ixion.runtime.BuiltInType
+import com.kingmang.ixion.runtime.DefType
+import com.kingmang.ixion.runtime.ExternalType
+import com.kingmang.ixion.runtime.IxType
+import com.kingmang.ixion.typechecker.TypeUtils.getFromString
+import java.lang.reflect.Method
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+object Modules {
+    val modules: MutableMap<String?, Class<*>?> = HashMap()
 
-public class Modules {
-
-    public static final Map<String, Class<?>> modules = new HashMap<>();
-    static {
-        modules.put("prelude", Prelude.class);
-        modules.put("gui", Prelude.class);
-        modules.put("http", HttpModule.class);
+    init {
+        modules["prelude"]  = Prelude::class.java
+        modules["gui"]      = Prelude::class.java
+        modules["http"]     = HttpModule::class.java
     }
 
-    public static List<DefType> getExports(String module) {
-        var result = new ArrayList<DefType>();
+    @JvmStatic
+    fun getExports(module: String?): MutableList<DefType?> {
+        val result = ArrayList<DefType?>()
         if (modules.containsKey(module)) {
-            var c = modules.get(module);
-            var m = c.getMethods();
-            for (var method : m) {
-                String name = method.getName();
-                if (method.getDeclaringClass().equals(Object.class)) {
-                    continue;
+            val c: Class<*> = modules[module]!!
+            val m = c.getMethods()
+            for (method in m) {
+                var name = method.name
+                if (method.declaringClass == Any::class.java) {
+                    continue
                 }
-                var parameters = getPairs(method);
-                boolean isPrefixed = false;
+                val parameters = getPairs(method)
+                var isPrefixed = false
                 if (name.startsWith("_")) {
-                    name = name.substring(1);
-                    isPrefixed = true;
+                    name = name.substring(1)
+                    isPrefixed = true
                 }
-                var funcType = new DefType(name, parameters);
-                funcType.isPrefixed = isPrefixed;
-                funcType.returnType = new ExternalType(method.getReturnType());
+                val funcType = DefType(name, parameters)
+                funcType.isPrefixed = isPrefixed
+                funcType.returnType = ExternalType(method.returnType)
 
-                var bt = TypeUtils.getFromString(method.getReturnType().getName());
-                if (bt != null) funcType.returnType = bt;
+                val bt = getFromString(method.returnType.getName())
+                if (bt != null) funcType.returnType = bt
 
-                funcType.glue = true;
-                funcType.owner = c.getName().replace('.', '/');
-                result.add(funcType);
-
+                funcType.glue = true
+                funcType.owner = c.getName().replace('.', '/')
+                result.add(funcType)
             }
-
         }
-        return result;
+        return result
     }
 
-    private static ArrayList<Pair<String, IxType>> getPairs(Method method) {
-        var parameters = new ArrayList<Pair<String, IxType>>();
-        for (var p : method.getParameterTypes()) {
-
-            IxType t = switch (p.getName()) {
-                case "int" -> BuiltInType.INT;
-                case "float" -> BuiltInType.FLOAT;
-                case "boolean" -> BuiltInType.BOOLEAN;
-                default -> new ExternalType(p);
-            };
-
-            var id = Pair.with("_", t);
-            parameters.add(id);
+    private fun getPairs(method: Method): ArrayList<Pair<String, IxType>> {
+        val parameters = ArrayList<Pair<String, IxType>>()
+        for (p in method.parameterTypes) {
+            val t = when (p.getName()) {
+                "int"       -> BuiltInType.INT
+                "float"     -> BuiltInType.FLOAT
+                "boolean"   -> BuiltInType.BOOLEAN
+                else        -> ExternalType(p)
+            }
+            parameters.add(Pair("_", t))
         }
-        return parameters;
+        return parameters
     }
-
-
 }

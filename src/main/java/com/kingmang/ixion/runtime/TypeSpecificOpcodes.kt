@@ -1,66 +1,20 @@
-package com.kingmang.ixion.runtime;
+package com.kingmang.ixion.runtime
 
-import static org.objectweb.asm.Opcodes.*;
+import org.objectweb.asm.Opcodes
 
-public enum TypeSpecificOpcodes {
-
-	INT(ILOAD, ISTORE, IRETURN, IADD, ISUB, IMUL, IDIV, INEG),
-	FLOAT(FLOAD, FSTORE, FRETURN, FADD, FSUB, FMUL, FDIV, FNEG),
-	DOUBLE(DLOAD, DSTORE, DRETURN, DADD, DSUB, DMUL, DDIV, DNEG),
-	VOID(ALOAD, ASTORE, RETURN, 0, 0, 0, 0, 0),
-	OBJECT(ALOAD, ASTORE, ARETURN, 0, 0, 0, 0, 0);
-
-	private final int load;
-	private final int store;
-	private final int ret;
-	private final int add;
-	private final int sub;
-	private final int mul;
-	private final int div;
-	private final int neg;
-
-	TypeSpecificOpcodes(int load, int store, int ret, int add, int sub, int mul, int div, int neg) {
-
-		this.load = load;
-		this.store = store;
-		this.ret = ret;
-		this.add = add;
-		this.sub = sub;
-		this.mul = mul;
-		this.div = div;
-		this.neg = neg;
-	}
-
-	public int getAdd() {
-		return add;
-	}
-
-	public int getDivide() {
-		return div;
-	}
-
-	public int getLoad() {
-		return load;
-	}
-
-	public int getMultiply() {
-		return mul;
-	}
-
-	public int getNeg() {
-		return neg;
-	}
-
-	public int getReturn() {
-		return ret;
-	}
-
-	public int getStore() {
-		return store;
-	}
-
-	public int getSubtract() {
-		return sub;
-	}
-
+enum class TypeSpecificOpcodes(
+    val load: Int,
+    val store: Int,
+    val `return`: Int,
+    val add: Int,
+    val subtract: Int,
+    val multiply: Int,
+    val divide: Int,
+    val neg: Int
+) {
+    INT(Opcodes.ILOAD, Opcodes.ISTORE, Opcodes.IRETURN, Opcodes.IADD, Opcodes.ISUB, Opcodes.IMUL, Opcodes.IDIV, Opcodes.INEG),
+    FLOAT(Opcodes.FLOAD, Opcodes.FSTORE, Opcodes.FRETURN, Opcodes.FADD, Opcodes.FSUB, Opcodes.FMUL, Opcodes.FDIV, Opcodes.FNEG),
+    DOUBLE(Opcodes.DLOAD, Opcodes.DSTORE, Opcodes.DRETURN, Opcodes.DADD, Opcodes.DSUB, Opcodes.DMUL, Opcodes.DDIV, Opcodes.DNEG),
+    VOID(Opcodes.ALOAD, Opcodes.ASTORE, Opcodes.RETURN, 0, 0, 0, 0, 0),
+    OBJECT(Opcodes.ALOAD, Opcodes.ASTORE, Opcodes.ARETURN, 0, 0, 0, 0, 0)
 }

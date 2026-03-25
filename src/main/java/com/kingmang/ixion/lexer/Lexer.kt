@@ -1,5 +1,5 @@
-package com.kingmang.ixion.lexer;
+package com.kingmang.ixion.lexer
 
-public interface Lexer {
-    Token tokenize();
+interface Lexer {
+    fun tokenize(): Token?
 }

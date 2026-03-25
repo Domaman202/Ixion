@@ -7,7 +7,6 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.commons.GeneratorAdapter
 import java.io.Serializable
 
-
 enum class BuiltInType(
     name: String,
     typeClass: Class<*>,
@@ -89,11 +88,11 @@ enum class BuiltInType(
     );
 
     private val namee: String?
-    private val typeClass: Class<*>?
-    private val descriptor: String?
+    override val typeClass: Class<*>?
+    override val descriptor: String?
     private val opcodes: TypeSpecificOpcodes
-    private val defaultValue: Any?
-    private val isNumeric: Boolean
+    override val defaultValue: Any?
+    override val isNumeric: Boolean
 
     init {
         this.namee = name
@@ -106,7 +105,7 @@ enum class BuiltInType(
 
     fun doBoxing(mv: MethodVisitor) {
         when (this) {
-            BuiltInType.INT -> mv.visitMethodInsn(
+            INT -> mv.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
                 "java/lang/Integer",
                 "valueOf",
@@ -114,7 +113,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.FLOAT -> mv.visitMethodInsn(
+            FLOAT -> mv.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
                 "java/lang/Float",
                 "valueOf",
@@ -122,7 +121,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.DOUBLE -> mv.visitMethodInsn(
+            DOUBLE -> mv.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
                 "java/lang/Double",
                 "valueOf",
@@ -130,7 +129,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.BOOLEAN -> mv.visitMethodInsn(
+            BOOLEAN -> mv.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
                 "java/lang/Boolean",
                 "valueOf",
@@ -138,40 +137,40 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.STRING -> {}
-            BuiltInType.ANY -> {}
+            STRING -> {}
+            ANY -> {}
             else -> System.err.println("Boxing isn't supported for that type.")
         }
     }
 
     fun doUnboxing(mv: MethodVisitor) {
         when (this) {
-            BuiltInType.INT -> {
+            INT -> {
                 mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Integer")
                 mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false)
             }
 
-            BuiltInType.CHAR -> {
+            CHAR -> {
                 mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Character")
                 mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Character", "charValue", "()C", false)
             }
 
-            BuiltInType.FLOAT -> {
+            FLOAT -> {
                 mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Integer")
                 mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Integer", "floatValue", "()F", false)
             }
 
-            BuiltInType.DOUBLE -> {
+            DOUBLE -> {
                 mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Double")
                 mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()D", false)
             }
 
-            BuiltInType.BOOLEAN -> {
+            BOOLEAN -> {
                 mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Boolean")
                 mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Boolean", "booleanValue", "()Z", false)
             }
 
-            BuiltInType.STRING -> mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String")
+            STRING -> mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String")
             else -> {
                 IxApi.exit("Unboxing isn't supported for that type.", 29)
             }
@@ -179,51 +178,28 @@ enum class BuiltInType(
     }
 
     val addOpcode: Int
-        get() = opcodes.getAdd()
-
-    override fun getDefaultValue(): Any? {
-        return this.defaultValue
-    }
-
-    override fun getDescriptor(): String? {
-        return descriptor
-    }
+        get() = opcodes.add
 
     val divideOpcode: Int
-        get() = opcodes.getDivide()
+        get() = opcodes.divide
 
-    override fun getInternalName(): String? {
-        return getDescriptor()
-    }
+    override val internalName: String?
+        get() = descriptor
 
-    override fun getLoadVariableOpcode(): Int {
-        return opcodes.getLoad()
-    }
+    override val loadVariableOpcode: Int
+        get() = opcodes.load
 
     val multiplyOpcode: Int
-        get() = opcodes.getMultiply()
-
-    override fun getName(): String? {
-        return name
-    }
+        get() = opcodes.multiply
 
     val negOpcode: Int
-        get() = opcodes.getNeg()
+        get() = opcodes.neg
 
-    override fun getReturnOpcode(): Int {
-        return opcodes.getReturn()
-    }
+    override val returnOpcode: Int
+        get() = opcodes.`return`
 
     val subtractOpcode: Int
-        get() = opcodes.getSubtract()
-
-    override fun getTypeClass(): Class<*>? {
-        return typeClass
-    }
-
-    override fun isNumeric(): Boolean {
-        return isNumeric
-    }
+        get() = opcodes.subtract
 
     override fun kind(): String? {
         return null
@@ -231,21 +207,21 @@ enum class BuiltInType(
 
     fun pushOne(ga: GeneratorAdapter) {
         when (this) {
-            BuiltInType.INT, BuiltInType.CHAR -> ga.push(1)
-            BuiltInType.FLOAT -> ga.push(1.0f)
-            BuiltInType.DOUBLE -> ga.push(1.0)
+            INT, CHAR -> ga.push(1)
+            FLOAT -> ga.push(1.0f)
+            DOUBLE -> ga.push(1.0)
             else -> ga.push(0)
         }
     }
 
     override fun toString(): String {
-        return getName()!!
+        return name
     }
 
     fun unboxNoCheck(mv: MethodVisitor) {
         when (this) {
-            BuiltInType.INT -> mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false)
-            BuiltInType.CHAR -> mv.visitMethodInsn(
+            INT -> mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false)
+            CHAR -> mv.visitMethodInsn(
                 Opcodes.INVOKEVIRTUAL,
                 "java/lang/Character",
                 "charValue",
@@ -253,7 +229,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.FLOAT -> mv.visitMethodInsn(
+            FLOAT -> mv.visitMethodInsn(
                 Opcodes.INVOKEVIRTUAL,
                 "java/lang/Float",
                 "floatValue",
@@ -261,7 +237,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.DOUBLE -> mv.visitMethodInsn(
+            DOUBLE -> mv.visitMethodInsn(
                 Opcodes.INVOKEVIRTUAL,
                 "java/lang/Double",
                 "doubleValue",
@@ -269,7 +245,7 @@ enum class BuiltInType(
                 false
             )
 
-            BuiltInType.BOOLEAN -> mv.visitMethodInsn(
+            BOOLEAN -> mv.visitMethodInsn(
                 Opcodes.INVOKEVIRTUAL,
                 "java/lang/Boolean",
                 "booleanValue",
@@ -282,46 +258,38 @@ enum class BuiltInType(
     }
 
     companion object {
-        val widenings: MutableMap<BuiltInType?, Int?> = HashMap<BuiltInType?, Int?>()
+        val widenings: MutableMap<BuiltInType?, Int?> = HashMap()
 
         fun getFromToken(tokenType: TokenType): BuiltInType? {
             return when (tokenType) {
-                TokenType.TRUE, TokenType.FALSE -> BuiltInType.BOOLEAN
-                TokenType.STRING -> BuiltInType.STRING
-                TokenType.INT -> BuiltInType.INT
-                TokenType.FLOAT -> BuiltInType.FLOAT
-                TokenType.DOUBLE -> BuiltInType.DOUBLE
-                else -> throw IllegalStateException("Unexpected value: " + tokenType)
+                TokenType.TRUE, TokenType.FALSE -> BOOLEAN
+                TokenType.STRING -> STRING
+                TokenType.INT -> INT
+                TokenType.FLOAT -> FLOAT
+                TokenType.DOUBLE -> DOUBLE
+                else -> throw IllegalStateException("Unexpected value: $tokenType")
             }
         }
         init {
-            widenings.put(BuiltInType.BOOLEAN, -1)
-            widenings.put(BuiltInType.CHAR, 0)
-            widenings.put(BuiltInType.INT, 0)
-            widenings.put(BuiltInType.FLOAT, 1)
-            widenings.put(BuiltInType.DOUBLE, 2)
-            widenings.put(BuiltInType.STRING, 10)
+            widenings[BOOLEAN]  = -1
+            widenings[CHAR]     = 0
+            widenings[INT]      = 0
+            widenings[FLOAT]    = 1
+            widenings[DOUBLE]   = 2
+            widenings[STRING]   = 10
         }
 
-        @JvmStatic
         fun widen(a: BuiltInType?, b: BuiltInType?): BuiltInType? {
-            val priorityA: Int? = widenings.get(a)
-            val priorityB: Int? = widenings.get(b)
+            val priorityA: Int? = widenings[a]
+            val priorityB: Int? = widenings[b]
 
-            if (priorityA == null && priorityB == null) {
-                return a
+            return when {
+                priorityA == null && priorityB == null -> a
+                priorityA == null -> b
+                priorityB == null -> a
+                priorityA > priorityB -> a
+                else -> b
             }
-            if (priorityA == null) {
-                return b
-            }
-            if (priorityB == null) {
-                return a
-            }
-
-            if (priorityA > priorityB) {
-                return a
-            }
-            return b
         }
     }
 }
