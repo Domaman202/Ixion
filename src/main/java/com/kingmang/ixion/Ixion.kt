@@ -44,18 +44,25 @@ class Ixion {
 
     @Throws(IOException::class, InterruptedException::class)
     fun executeBytecode(className: String?) {
-        val processBuilder = ProcessBuilder(
-            "java",
-            "--enable-preview",
-            "-cp",
-            "${IxionConstant.OUT_DIR}${File.pathSeparator}target/classes",
-            className
-        )
-        processBuilder.inheritIO()
-        val process = processBuilder.start()
-
-        val status = process.waitFor()
-        if (status != 0) System.err.println("Process finished with exit code $status")
+//        val processBuilder = ProcessBuilder(
+//            "java",
+//            "--enable-preview",
+//            "-cp",
+//            "${IxionConstant.OUT_DIR}${File.pathSeparator}target/classes",
+//            className
+//        )
+//        processBuilder.inheritIO()
+//        val process = processBuilder.start()
+//
+//        val status = process.waitFor()
+//        if (status != 0) System.err.println("Process finished with exit code $status")
+        val classpath: Array<URL?> = arrayOf(File(IxionConstant.OUT_DIR).toURI().toURL())
+        URLClassLoader(classpath).use { loader ->
+            loader
+                .loadClass(className)
+                .getMethod("main", Array<String>::class.java)
+                .invoke(null, arrayOfNulls<String>(0) as Any)
+        }
     }
 
     @Throws(IOException::class, InterruptedException::class)
@@ -221,7 +228,9 @@ class Ixion {
             var output: String? = ""
             val capture = CombinedOutputCapture()
             try {
-                loader.loadClass(className).getMethod("main", Array<String>::class.java)
+                loader
+                    .loadClass(className)
+                    .getMethod("main", Array<String>::class.java)
                     .invoke(null, arrayOfNulls<String>(0) as Any)
             } catch (e: Exception) {
                 System.err.println("Error:")
