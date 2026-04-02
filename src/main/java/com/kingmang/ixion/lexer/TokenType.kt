@@ -96,8 +96,8 @@ enum class TokenType {
         get() = KEYWORD_TYPES.contains(this)
 
     companion object {
-        private val matcher = HashMap<String?, TokenType?>()
-        private val KEYWORD_TYPES: MutableSet<TokenType?> = EnumSet.of(
+        private val matcher = HashMap<String?, TokenType>()
+        private val KEYWORD_TYPES: MutableSet<TokenType> = EnumSet.of(
             CASE,
             FOR,
             WHILE,

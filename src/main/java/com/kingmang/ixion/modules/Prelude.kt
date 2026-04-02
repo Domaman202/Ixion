@@ -46,7 +46,7 @@ object Prelude {
     @JvmStatic
     fun len(r: Any?): Int {
         return when (r) {
-            is IxListWrapper -> r.list!!.size + 1
+            is IxListWrapper -> r.list.size + 1
             is String        -> r.length
             else             -> -1
         }
