@@ -1,4 +1,4 @@
-package com.kingmang.ixion.env
+package com.kingmang.ixion.semantic
 
 import com.kingmang.ixion.Visitor
 import com.kingmang.ixion.api.Context
@@ -8,12 +8,16 @@ import com.kingmang.ixion.api.IxFile
 import com.kingmang.ixion.api.IxionConstant.Mutability
 import com.kingmang.ixion.ast.*
 import com.kingmang.ixion.exception.*
-import com.kingmang.ixion.lexer.Token
 import com.kingmang.ixion.lexer.TokenType
 import com.kingmang.ixion.lexer.TokenType.Companion.isKeyword
 import com.kingmang.ixion.modules.Modules.getExports
 import com.kingmang.ixion.modules.Modules.modules
 import com.kingmang.ixion.runtime.*
+import com.kingmang.ixion.runtime.ixfunction.IxFunction0
+import com.kingmang.ixion.runtime.ixfunction.IxFunction1
+import com.kingmang.ixion.runtime.ixfunction.IxFunction2
+import com.kingmang.ixion.runtime.ixfunction.IxFunction3
+import com.kingmang.ixion.runtime.ixfunction.IxFunction4
 import com.kingmang.ixion.typechecker.TypeUtils
 import com.kingmang.ixion.typechecker.TypeUtils.getFromToken
 import java.io.File
@@ -25,7 +29,7 @@ import java.util.stream.Collectors
  * Visitor for building the symbol table and type environment during compilation
  * Traverses the AST and registers variables, functions, types in appropriate scopes
  */
-class EnvironmentVisitor(ixApi: IxApi?, val rootContext: Context?, val source: IxFile) : Visitor<Optional<IxType>> {
+class SemanticVisitor(ixApi: IxApi?, val rootContext: Context?, val source: IxFile) : Visitor<Optional<IxType>> {
     val ixApi: IxApi?
     val file: File
     var currentContext: Context?
@@ -430,7 +434,29 @@ class EnvironmentVisitor(ixApi: IxApi?, val rootContext: Context?, val source: I
     }
 
     override fun visitLambda(expression: LambdaExpression): Optional<IxType> {
-        return Optional.empty()
+        val childEnvironment = expression.body.context
+        childEnvironment.parent = currentContext
+
+        val parameters = ArrayList<Pair<String, IxType>>()
+        for (param in expression.parameters) {
+            val resolved = if (param.type != null) {
+                param.type.accept(this).orElseGet(Supplier { UnknownType() })
+            } else {
+                UnknownType()
+            }
+            parameters.add(Pair(param.name.source!!, resolved))
+            childEnvironment.addVariable(param.name.source, resolved)
+        }
+
+        val resolvedReturnType = expression.returnType.accept(this).orElseGet(Supplier { UnknownType() })
+        val lambdaType = LambdaType(parameters, resolvedReturnType, functionalInterfaceByArity(expression.parameters.size, expression))
+        expression.realType = lambdaType
+
+        currentContext = childEnvironment
+        expression.body.accept(this)
+        currentContext = currentContext!!.parent
+
+        return Optional.of(lambdaType)
     }
 
     override fun visitEnumAccess(expression: EnumAccessExpression): Optional<IxType> {
@@ -562,5 +588,19 @@ class EnvironmentVisitor(ixApi: IxApi?, val rootContext: Context?, val source: I
 
         currentContext = currentContext!!.parent
         return Optional.empty()
+    }
+
+    private fun functionalInterfaceByArity(arity: Int, expression: LambdaExpression): Class<*> {
+        return when (arity) {
+            0 -> IxFunction0::class.java
+            1 -> IxFunction1::class.java
+            2 -> IxFunction2::class.java
+            3 -> IxFunction3::class.java
+            4 -> IxFunction4::class.java
+            else -> {
+                ImplementationException().send(ixApi, file, expression, "Lambdas support up to 4 parameters.")
+                IxFunction4::class.java
+            }
+        }
     }
 }

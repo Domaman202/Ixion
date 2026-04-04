@@ -1,0 +1,18 @@
+use <prelude>
+
+pub def main() {
+    var add = lambda (a: int, b: int): int {
+        return a + b
+    }
+
+    println(add(20, 22))
+
+    var greet = lambda (name: string): void {
+        println("Hello, " + name)
+    }
+    greet("Ixion")
+
+    println(lambda (x: int): int {
+        return x * x
+    }(7))
+}

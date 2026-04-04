@@ -44,6 +44,15 @@ class ExamplesTest {
         """)
     }
 
+    @Test
+    fun lambda() {
+        ixAssert("lambda.ix", """
+            42
+            Hello, Ixion
+            49
+        """)
+    }
+
     private fun ixAssert(runPath: String, expected: String) {
         val ixion = Ixion()
         assertDoesNotThrow {

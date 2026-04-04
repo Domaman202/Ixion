@@ -24,6 +24,7 @@ import com.kingmang.ixion.typechecker.TypeResolver
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.lang3.NotImplementedException
 import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
@@ -39,6 +40,7 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
     val cw: ClassWriter
     val structWriters: MutableMap<StructType, ClassWriter> = HashMap()
     private val functionStack = Stack<DefType>()
+    private var lambdaCounter = 0
 
     var currentContext: Context?
 
@@ -353,6 +355,34 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
                 }
 
                 funcType.ga!!.visitMethodInsn(Opcodes.INVOKESTATIC, owner, name, methodDescriptor, false)
+            }
+        } else if (expression.item.realType is LambdaType) {
+            val lambdaType = expression.item.realType as LambdaType
+            val ga = funcType.ga!!
+
+            expression.item.accept(this)
+            CollectionUtil.zip(
+                lambdaType.parameters,
+                expression.arguments,
+                BiConsumer { _: Pair<String, IxType>, arg: Expression? ->
+                    arg!!.accept(this)
+                    if (arg.realType is BuiltInType) {
+                        (arg.realType as BuiltInType).doBoxing(ga)
+                    }
+                })
+
+            ga.invokeInterface(
+                Type.getType(lambdaType.descriptor),
+                Method("apply", lambdaType.erasedApplyDescriptor())
+            )
+
+            when (val returnType = lambdaType.returnType) {
+                is BuiltInType -> when (returnType) {
+                    BuiltInType.VOID -> ga.pop()
+                    BuiltInType.ANY -> {}
+                    else -> returnType.doUnboxing(ga)
+                }
+                else -> ga.checkCast(Type.getType(returnType.descriptor))
             }
         } else if (expression.item.realType is StructType) {
             val st = expression.item.realType as StructType
@@ -880,6 +910,58 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
      * @return Пустой Optional
      */
     override fun visitLambda(expression: LambdaExpression): Optional<ClassWriter> {
+        val lambdaType = expression.realType as LambdaType
+        val owner = FilenameUtils.removeExtension(source.fullRelativePath)
+        val lambdaMethodName = "lambda\$${lambdaCounter++}"
+        val implementationReturnType = if (lambdaType.returnType == BuiltInType.VOID) {
+            BuiltInType.ANY
+        } else {
+            lambdaType.returnType
+        }
+
+        val implementationDescriptor = CollectionUtil.getMethodDescriptor(lambdaType.parameters, implementationReturnType)
+        val methodAccess = Opcodes.ACC_PRIVATE or Opcodes.ACC_STATIC or Opcodes.ACC_SYNTHETIC
+
+        val mv = cw.visitMethod(methodAccess, lambdaMethodName, implementationDescriptor, null, null)
+        val lambdaDef = DefType(lambdaMethodName, lambdaType.parameters)
+        lambdaDef.returnType = implementationReturnType
+        lambdaDef.bridgeVoidToObject = lambdaType.returnType == BuiltInType.VOID
+        lambdaDef.ga = GeneratorAdapter(mv, methodAccess, lambdaMethodName, implementationDescriptor)
+        for (i in lambdaType.parameters.indices) {
+            val param = lambdaType.parameters[i]
+            lambdaDef.argMap[param.first] = i
+        }
+
+        functionStack.add(lambdaDef)
+        val previousContext = currentContext
+        currentContext = expression.body.context
+        expression.body.accept(this)
+        lambdaDef.ga!!.endMethod()
+        currentContext = previousContext
+        functionStack.pop()
+
+        val bsmHandle = Handle(
+            Opcodes.H_INVOKESTATIC,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles\$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            false
+        )
+        val implementationHandle = Handle(
+            Opcodes.H_INVOKESTATIC,
+            owner,
+            lambdaMethodName,
+            implementationDescriptor,
+            false
+        )
+        functionStack.peek().ga!!.invokeDynamic(
+            "apply",
+            "()${lambdaType.descriptor}",
+            bsmHandle,
+            Type.getMethodType(lambdaType.erasedApplyDescriptor()),
+            implementationHandle,
+            Type.getMethodType(lambdaInstantiationDescriptor(lambdaType))
+        )
         return Optional.empty()
     }
 
@@ -913,7 +995,12 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
 
             funcType.ga!!.visitInsn(returnType!!.returnOpcode)
         } else {
-            funcType.ga!!.visitInsn(Opcodes.RETURN)
+            if (funcType.bridgeVoidToObject) {
+                funcType.ga!!.visitInsn(Opcodes.ACONST_NULL)
+                funcType.ga!!.visitInsn(Opcodes.ARETURN)
+            } else {
+                funcType.ga!!.visitInsn(Opcodes.RETURN)
+            }
         }
         return Optional.empty()
     }
@@ -1144,6 +1231,24 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
                 ga.visitInsn(op)
             } else {
                 exit("need a test case here", 452)
+            }
+        }
+
+        private fun lambdaInstantiationDescriptor(lambdaType: LambdaType): String {
+            val params = lambdaType.parameters.joinToString("") { boxedDescriptor(it.second) }
+            val returnDescriptor = boxedDescriptor(lambdaType.returnType)
+            return "($params)$returnDescriptor"
+        }
+
+        private fun boxedDescriptor(type: IxType): String {
+            return when (type) {
+                BuiltInType.INT -> "Ljava/lang/Integer;"
+                BuiltInType.FLOAT -> "Ljava/lang/Float;"
+                BuiltInType.DOUBLE -> "Ljava/lang/Double;"
+                BuiltInType.BOOLEAN -> "Ljava/lang/Boolean;"
+                BuiltInType.CHAR -> "Ljava/lang/Character;"
+                BuiltInType.VOID -> "Ljava/lang/Object;"
+                else -> type.descriptor!!
             }
         }
     }

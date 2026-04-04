@@ -12,6 +12,11 @@ import com.kingmang.ixion.lexer.TokenType
 import com.kingmang.ixion.runtime.*
 import com.kingmang.ixion.runtime.BuiltInType.Companion.widen
 import com.kingmang.ixion.runtime.CollectionUtil.Companion.zip
+import com.kingmang.ixion.runtime.ixfunction.IxFunction0
+import com.kingmang.ixion.runtime.ixfunction.IxFunction1
+import com.kingmang.ixion.runtime.ixfunction.IxFunction2
+import com.kingmang.ixion.runtime.ixfunction.IxFunction3
+import com.kingmang.ixion.runtime.ixfunction.IxFunction4
 import com.kingmang.ixion.typechecker.TypeResolver.typesMatch
 import java.io.File
 import java.lang.String
@@ -19,6 +24,7 @@ import java.util.*
 import java.util.function.BiConsumer
 import java.util.function.Consumer
 import java.util.function.Predicate
+import java.util.stream.Collectors
 import kotlin.Any
 import kotlin.IllegalStateException
 import kotlin.Pair
@@ -200,6 +206,24 @@ class TypeCheckVisitor(val ixApi: IxApi?, val rootContext: Context?, ixFile: IxF
         }
 
         when (t) {
+            is LambdaType -> {
+                if (t.parameters.size != expression.arguments.size) {
+                    FunctionSignatureMismatchException().send(ixApi, file, expression.item, "lambda")
+                    return Optional.empty()
+                }
+
+                zip(
+                    t.parameters,
+                    expression.arguments,
+                    BiConsumer { param: Pair<kotlin.String, IxType>, arg: Expression ->
+                        val at: Optional<IxType> = arg.accept(this)
+                        at.ifPresent(Consumer { type: IxType? -> typecheckCallParameters(param, arg, type!!) })
+                    })
+
+                expression.realType = t.returnType
+                return Optional.of(t.returnType)
+            }
+
             is DefType -> {
                 var rt = t.returnType
                 if (t.hasGenerics()) {
@@ -554,7 +578,56 @@ class TypeCheckVisitor(val ixApi: IxApi?, val rootContext: Context?, ixFile: IxF
     }
 
     override fun visitLambda(expression: LambdaExpression): Optional<IxType> {
-        return Optional.empty()
+        val childEnvironment = expression.body.context
+        childEnvironment.parent = currentContext
+
+        val parameters = ArrayList<Pair<kotlin.String, IxType>>()
+        for (param in expression.parameters) {
+            val rawType = if (param.type != null) {
+                param.type.accept(this).orElseGet { UnknownType() }
+            } else {
+                UnknownType()
+            }
+            val resolvedType = if (rawType is UnknownType) {
+                currentContext!!.getVariable(rawType.typeName) ?: rawType
+            } else {
+                rawType
+            }
+            parameters.add(Pair(param.name.source!!, resolvedType))
+            childEnvironment.setVariableType(param.name.source, resolvedType)
+        }
+
+        var returnType = expression.returnType.accept(this).orElseGet { UnknownType() }
+        if (returnType is UnknownType) {
+            val attempt = currentContext!!.getVariable(returnType.typeName)
+            if (attempt != null) {
+                returnType = attempt
+            } else {
+                IdentifierNotFoundException().send(ixApi, file, expression, returnType.typeName)
+            }
+        }
+
+        val lambdaType = LambdaType(parameters, returnType, functionalInterfaceByArity(parameters.size, expression))
+        expression.realType = lambdaType
+
+        val lambdaFunction = DefType("#lambda", parameters)
+        lambdaFunction.returnType = returnType
+        functionStack.add(lambdaFunction)
+
+        currentContext = childEnvironment
+        expression.body.accept(this)
+        currentContext = currentContext!!.parent
+
+        if (!lambdaFunction.hasReturn2) {
+            val returnStmt = ReturnStatement(
+                Position(0, 0),
+                EmptyExpression(Position(0, 0))
+            )
+            expression.body.statements.add(returnStmt)
+        }
+        functionStack.pop()
+
+        return Optional.of(lambdaType)
     }
 
     override fun visitEnumAccess(expression: EnumAccessExpression): Optional<IxType> {
@@ -641,11 +714,35 @@ class TypeCheckVisitor(val ixApi: IxApi?, val rootContext: Context?, ixFile: IxF
     }
 
     override fun visitTypeAlias(statement: TypeStatement): Optional<IxType> {
-        return Optional.empty()
+        var type: IxType?
+        if (statement.next.isEmpty) {
+            val bt = TypeUtils.getFromString(statement.identifier!!.source!!)
+            type = Objects.requireNonNullElseGet(bt) { UnknownType(statement.identifier.source) }
+            if (statement.listType) {
+                type = ListType(type!!)
+            }
+        } else {
+            val path = StringBuilder(statement.identifier!!.source)
+            var ptr: Optional<TypeStatement> = statement.next
+            while (ptr.isPresent) {
+                path.append(".").append(ptr.get().identifier!!.source)
+                ptr = ptr.get().next
+            }
+            type = Objects.requireNonNullElse(
+                currentContext!!.getVariableTyped<StructType?>(path.toString(), StructType::class.java as Class<StructType?>),
+                UnknownType(path.toString())
+            )
+        }
+        return Optional.of(type!!)
     }
 
     override fun visitUnionType(statement: UnionTypeStatement): Optional<IxType> {
-        return Optional.empty()
+        val union = UnionType(
+            statement.types.stream()
+                .map<IxType?> { type: TypeStatement? -> type!!.accept(this).orElseThrow() }
+                .collect(Collectors.toSet())
+        )
+        return Optional.of(union)
     }
 
     /**
@@ -786,5 +883,19 @@ class TypeCheckVisitor(val ixApi: IxApi?, val rootContext: Context?, ixFile: IxF
 
         structType.parameters.clear()
         structType.parameters.addAll(parametersAfter)
+    }
+
+    private fun functionalInterfaceByArity(arity: Int, expression: LambdaExpression): Class<*> {
+        return when (arity) {
+            0 -> IxFunction0::class.java
+            1 -> IxFunction1::class.java
+            2 -> IxFunction2::class.java
+            3 -> IxFunction3::class.java
+            4 -> IxFunction4::class.java
+            else -> {
+                ImplementationException().send(ixApi, file, expression, "Lambdas support up to 4 parameters.")
+                IxFunction4::class.java
+            }
+        }
     }
 }

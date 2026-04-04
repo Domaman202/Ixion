@@ -15,6 +15,7 @@ class DefType : StructType {
     var hasReturn2: Boolean = false
     var isPrefixed: Boolean = false
     var owner: String? = null
+    var bridgeVoidToObject: Boolean = false
 
     var specializations: MutableList<MutableMap<String, IxType>> = ArrayList()
 

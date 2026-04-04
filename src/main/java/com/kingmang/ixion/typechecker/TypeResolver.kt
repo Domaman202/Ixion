@@ -62,6 +62,19 @@ object TypeResolver {
         return when {
             // struct
             arg is StructType   && par is StructType      -> arg.parameters == par.parameters && arg.name == par.name
+            par is LambdaType   && arg is LambdaType      -> {
+                if (par.parameters.size != arg.parameters.size) {
+                    return false
+                }
+                for (i in par.parameters.indices) {
+                    if (!typesMatch(par.parameters[i].second, arg.parameters[i].second)) {
+                        return false
+                    }
+                }
+                typesMatch(par.returnType, arg.returnType)
+            }
+            par is ExternalType && arg is LambdaType      -> par.typeClass!!.isAssignableFrom(arg.functionalInterface)
+            par is LambdaType   && arg is ExternalType    -> arg.typeClass!!.isAssignableFrom(par.functionalInterface)
             // external
             par is ExternalType && arg is ExternalType    -> par.name == arg.name
             // other

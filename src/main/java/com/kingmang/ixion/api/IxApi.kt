@@ -5,13 +5,12 @@ import com.kingmang.ixion.ast.ExportStatement
 import com.kingmang.ixion.ast.UseStatement
 import com.kingmang.ixion.codegen.BytecodeGenerator
 import com.kingmang.ixion.codegen.JavaCodegenVisitor
-import com.kingmang.ixion.env.EnvironmentVisitor
+import com.kingmang.ixion.semantic.SemanticVisitor
 import com.kingmang.ixion.exception.IxException
 import com.kingmang.ixion.exception.IxException.CompilerError
 import com.kingmang.ixion.exception.ModuleNotFoundException
 import com.kingmang.ixion.modules.Modules
 import com.kingmang.ixion.runtime.DefType
-import com.kingmang.ixion.runtime.IxType
 import com.kingmang.ixion.runtime.IxionExitException
 import com.kingmang.ixion.typechecker.TypeCheckVisitor
 import org.apache.commons.io.FilenameUtils
@@ -55,8 +54,8 @@ data class IxApi(
 
         for (filePath in compilationSet!!.keys) {
             val source: IxFile = compilationSet[filePath]!!
-            val environmentVisitor = EnvironmentVisitor(this, source.rootContext, source)
-            source.acceptVisitor(environmentVisitor)
+            val semanticVisitor = SemanticVisitor(this, source.rootContext, source)
+            source.acceptVisitor(semanticVisitor)
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {
@@ -171,8 +170,8 @@ data class IxApi(
 
         for (filePath in compilationSet!!.keys) {
             val source: IxFile = compilationSet[filePath]!!
-            val environmentVisitor = EnvironmentVisitor(this, source.rootContext, source)
-            source.acceptVisitor(environmentVisitor)
+            val semanticVisitor = SemanticVisitor(this, source.rootContext, source)
+            source.acceptVisitor(semanticVisitor)
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {

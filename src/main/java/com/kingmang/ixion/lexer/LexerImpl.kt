@@ -19,7 +19,7 @@ class LexerImpl(file: File) : Lexer {
     var line: Int = 1
     var col: Int = 1
 
-    override fun tokenize(): Token? {
+    override fun tokenize(): Token {
         skipWhitespace()
 
         val startLine = line
@@ -296,7 +296,7 @@ class LexerImpl(file: File) : Lexer {
     }
 
     private fun isDigit(c: Char): Boolean {
-        return c >= '0' && c <= '9'
+        return c in '0'..'9'
     }
 
 
