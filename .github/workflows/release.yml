@@ -62,8 +62,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build and test
-        run: ./gradlew --no-daemon clean test build -PreleaseVersion=${{ steps.version.outputs.value }}
+      - name: Run unit and integration tests
+        run: ./gradlew --no-daemon clean test -PreleaseVersion=${{ steps.version.outputs.value }}
+
+      - name: Build artifacts
+        run: ./gradlew --no-daemon build -x test -PreleaseVersion=${{ steps.version.outputs.value }}
 
       - name: Publish to GitHub Packages
         run: ./gradlew --no-daemon publish -PreleaseVersion=${{ steps.version.outputs.value }}
@@ -71,6 +74,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-reports
+          path: |
+            build/reports/tests
+            build/test-results
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

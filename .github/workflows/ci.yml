@@ -45,5 +45,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Run checks
-        run: ./gradlew --no-daemon clean check
+      - name: Run unit and integration tests
+        run: ./gradlew --no-daemon clean test
+
+      - name: Run additional checks
+        run: ./gradlew --no-daemon check -x test
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-reports
+          path: |
+            build/reports/tests
+            build/test-results
