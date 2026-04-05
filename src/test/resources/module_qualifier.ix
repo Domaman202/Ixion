@@ -1,6 +1,6 @@
-use <prelude>
+use <std>
 use <http>
 
 pub def main() {
-    prelude::println(http::urlEncode("a b&c"))
+    std::println(http::urlEncode("a b&c"))
 }

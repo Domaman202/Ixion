@@ -1,14 +1,14 @@
-use <prelude>
+use <std>
 
 pub def main() {
     var add = lambda (a: int, b: int): int {
         return a + b
     }
 
-    println(add(20, 22))
+    std::println(add(20, 22))
 
     var greet = lambda (name: string): void {
-        println("Hello, " + name)
+        std::println("Hello, " + name)
     }
     greet("Ixion")
 
