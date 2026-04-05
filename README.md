@@ -6,29 +6,26 @@ Multi-paradigm compiled programming language for the jvm platform.
 
 
 > [!IMPORTANT]
-> Before installing the language, install Microsoft JDK 21.
+> Before installing the language, install JDK.
 
 greeting in Ixion:
-```
-use <prelude>
+```scala
+use <std>
 
 def main(){
-    const langs = [
-        "Hello, world!",
-        "¡Hola Mundo!",
-        "Γειά σου Κόσμε!",
-        "Привет, мир!",
-        "こんにちは世界！"
-    ]
-    println(langs)
+    var greeting = lambda(name : string) : string{
+        return "Hello, " + name
+    }
+    
+    std::print(greeting("Artyom"))
 }
 ```
 
 
 pattern matching:
 
-```
-use <prelude>
+```scala
+use <std>
 
 type number = int | float
 
@@ -39,8 +36,8 @@ pub def main(){
 
 def print_type(num : number){
     case num {
-        int i => println("value " + i + " is integer")
-        float f => println("value " + f + " is float")
+        int i => std::println("value " + i + " is integer")
+        float f => std::println("value " + f + " is float")
     }
 }
 
