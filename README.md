@@ -13,7 +13,9 @@ greeting in Ixion:
 use <std>
 
 def main(){
-    var greeting = lambda(name : string) : string{
+  
+  }
+    var greeting = lambda(name : string) : string {
         return "Hello, " + name
     }
     
@@ -29,7 +31,7 @@ use <std>
 
 type number = int | float
 
-pub def main(){
+def main(){
     print_type(10)
     print_type(10.0f)
 }
