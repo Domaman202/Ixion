@@ -1,0 +1,8 @@
+use <prelude>
+use <http>
+
+pub def main() {
+    var url = "https://example.com"
+    prelude::println("status: " + http::status("GET", url, ""))
+    prelude::println(http::get(url))
+}

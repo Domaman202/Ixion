@@ -11,6 +11,7 @@
 * [Циклы](#Циклы)
 * [Структуры](#Структуры)
 * [Перечисления](#Перечисления)
+* [HTTP модуль](#HTTP-модуль)
 
 
 # Первая программа
@@ -22,10 +23,10 @@
 описан в [документе]() (на данный момент документ приватный).
 
 ````scala
-use <prelude>
+use <std>
 
 def main() {
-    println("Hello World")
+    std::println("Hello World")
 }
 ````
 
@@ -36,23 +37,23 @@ def main() {
 Пример 1:
 
 ````scala
-use <prelude>
+use <std>
 
 def main() {
     var h = "Hello "
     var w = "World"
-    println(h + w)
+    std::println(h + w)
 }
 ````
 
 Пример 2:
 
 ````scala
-use <prelude>
+use <std>
 
 def main() {
     var a = 10
-    print(a)
+    std::print(a)
 }
 ````
 
@@ -66,10 +67,10 @@ def main() {
 числа и возвращает их сумму:
 
 ````scala
-use <prelude>
+use <std>
 
 def main() {
-    println(sum(10, 2))
+    std::println(sum(10, 2))
 }
 
 def sum(a : int, b : int): int {
@@ -99,10 +100,10 @@ def main(){
 
 Функция, которая возвращает список целых чисел:
 ````scala
-use <prelude>
+use <std>
 
 def main(){
-    print(ret_list())
+    std::print(ret_list())
 }
 
 def ret_list() : int[] {
@@ -112,11 +113,11 @@ def ret_list() : int[] {
 
 Получить элемент списка:
 ````scala
-use <prelude>
+use <std>
 
 def main(){
     var nums = [1,2,3]
-    print(list_get(nums, 0))
+    std::print(list_get(nums, 0))
 }
 ````
 
@@ -124,12 +125,12 @@ def main(){
 
 ````scala
 
-use <prelude>
+use <std>
 
 type text = string
 
-def main(){
-    println(greeting("Artyom"))
+def main(){ 
+    std::println(greeting("Artyom"))
 }
 
 def greeting(name : text) : text {
@@ -144,30 +145,30 @@ def greeting(name : text) : text {
 
 Пример 1:
 ````scala
-use <prelude>
+use <std>
 
 def main(){
     var flag = true
     if(flag) {
-        print("yes :)")
+      std::print("yes :)")
     } else {
-        print("no :(")
+      std::print("no :(")
     }
 }
 ````
 
 Пример 2:
 ````scala
-use <prelude>
+use <std>
 
 def main(){
     var age = 18
     if(age >= 18) {
-        print("hello!")
+      std::print("hello!")
     } else if(age >= 16){
-        print("go home")
+      std::print("go home")
     } else {
-        print("go home kid")
+      std::print("go home kid")
     }
 } 
 ````
@@ -177,7 +178,7 @@ def main(){
 Пример pattern matching'a с алгебраическими типами
 
 ````scala
-use <prelude>
+use <std>
 
 type number = int | float
 
@@ -188,10 +189,37 @@ pub def main(){
 
 def print_type(num : number){
     case num {
-        int i => println("value " + i + " is integer")
-        float f => println("value " + f + " is float")
+        int i => std::println("value " + i + " is integer")
+        float f => std::println("value " + f + " is float")
     }
 }
 ````
 
 # Циклы
+
+# HTTP модуль
+
+Для HTTP-запросов:
+
+````scala
+use <http>
+use <std>
+
+def main() {
+    var body = http::get("https://example.com")
+    std::println(body)
+
+    var status = http::requestStatus("GET", "https://example.com", "")
+    std::println(status)
+}
+````
+
+Доступные функции:
+- `get(url: string): string`
+- `delete(url: string): string`
+- `post(url: string, body: string): string`
+- `put(url: string, body: string): string`
+- `patch(url: string, body: string): string`
+- `request(method: string, url: string, body: string): string`
+- `requestStatus(method: string, url: string, body: string): int`
+- `urlEncode(value: string): string`

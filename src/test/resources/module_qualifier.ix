@@ -1,0 +1,6 @@
+use <prelude>
+use <http>
+
+pub def main() {
+    prelude::println(http::urlEncode("a b&c"))
+}

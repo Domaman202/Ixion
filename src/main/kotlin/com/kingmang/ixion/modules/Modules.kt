@@ -4,14 +4,13 @@ import com.kingmang.ixion.runtime.BuiltInType
 import com.kingmang.ixion.runtime.DefType
 import com.kingmang.ixion.runtime.ExternalType
 import com.kingmang.ixion.runtime.IxType
-import com.kingmang.ixion.typechecker.TypeUtils.getFromString
 import java.lang.reflect.Method
 
 object Modules {
     val modules: MutableMap<String?, Class<*>?> = HashMap()
 
     init {
-        modules["prelude"]  = Prelude::class.java
+        modules["std"]  = Prelude::class.java
         modules["gui"]      = Prelude::class.java
         modules["http"]     = HttpModule::class.java
     }
@@ -35,10 +34,7 @@ object Modules {
                 }
                 val funcType = DefType(name, parameters)
                 funcType.isPrefixed = isPrefixed
-                funcType.returnType = ExternalType(method.returnType)
-
-                val bt = getFromString(method.returnType.getName())
-                if (bt != null) funcType.returnType = bt
+                funcType.returnType = mapJavaType(method.returnType)
 
                 funcType.glue = true
                 funcType.owner = c.getName().replace('.', '/')
@@ -51,14 +47,34 @@ object Modules {
     private fun getPairs(method: Method): ArrayList<Pair<String, IxType>> {
         val parameters = ArrayList<Pair<String, IxType>>()
         for (p in method.parameterTypes) {
-            val t = when (p.getName()) {
-                "int"       -> BuiltInType.INT
-                "float"     -> BuiltInType.FLOAT
-                "boolean"   -> BuiltInType.BOOLEAN
-                else        -> ExternalType(p)
-            }
-            parameters.add(Pair("_", t))
+            parameters.add(Pair("_", mapJavaType(p)))
         }
         return parameters
+    }
+
+    private fun mapJavaType(type: Class<*>): IxType {
+        return when (type) {
+            java.lang.Integer.TYPE,
+            java.lang.Integer::class.java -> BuiltInType.INT
+
+            java.lang.Float.TYPE,
+            java.lang.Float::class.java -> BuiltInType.FLOAT
+
+            java.lang.Double.TYPE,
+            java.lang.Double::class.java -> BuiltInType.DOUBLE
+
+            java.lang.Boolean.TYPE,
+            java.lang.Boolean::class.java -> BuiltInType.BOOLEAN
+
+            java.lang.Character.TYPE,
+            java.lang.Character::class.java -> BuiltInType.CHAR
+
+            java.lang.String::class.java -> BuiltInType.STRING
+
+            java.lang.Void.TYPE,
+            java.lang.Void::class.java -> BuiltInType.VOID
+
+            else -> ExternalType(type)
+        }
     }
 }

@@ -1,12 +1,13 @@
 package com.kingmang.ixion.modules
 
 import com.kingmang.ixion.exception.Panic
-import com.kingmang.ixion.runtime.CollectionUtil
 import com.kingmang.ixion.runtime.CollectionUtil.IxListWrapper
 import java.util.*
+import java.util.stream.IntStream
 
 @Suppress("unused")
 object Prelude {
+
     @JvmStatic
     fun panic(msg: Any?) {
         Panic(msg as String?).send()
@@ -31,6 +32,11 @@ object Prelude {
         }
         scanner.close()
         return null
+    }
+
+    @JvmStatic
+    fun <T> range(start: Int, stop: Int): MutableIterator<Int?> {
+        return IntStream.range(start, stop).boxed().iterator()
     }
 
     @JvmStatic

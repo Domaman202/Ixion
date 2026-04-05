@@ -310,7 +310,7 @@ class SemanticVisitor(ixApi: IxApi?, val rootContext: Context?, val source: IxFi
             val ree = getExports(requestedImport)
             for (ft in ree) {
                 val typeName = ft!!.name
-                this.currentContext!!.addVariableOrError(ixApi, typeName, ft, file, statement)
+                this.currentContext!!.addVariableOrError(ixApi, "$requestedImport::$typeName", ft, file, statement)
             }
         }
 

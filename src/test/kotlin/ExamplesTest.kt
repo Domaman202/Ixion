@@ -53,6 +53,13 @@ class ExamplesTest {
         """)
     }
 
+    @Test
+    fun module_qualifier() {
+        ixAssert("module_qualifier.ix", """
+            a+b%26c
+        """)
+    }
+
     private fun ixAssert(runPath: String, expected: String) {
         val ixion = Ixion()
         assertDoesNotThrow {
