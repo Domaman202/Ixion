@@ -12,7 +12,7 @@ pub def main() {
     }
     greet("Ixion")
 
-    println(lambda (x: int): int {
+    std::println(lambda (x: int): int {
         return x * x
     }(7))
 }
