@@ -13,8 +13,6 @@ greeting in Ixion:
 use <std>
 
 def main(){
-  
-  }
     var greeting = lambda(name : string) : string {
         return "Hello, " + name
     }
