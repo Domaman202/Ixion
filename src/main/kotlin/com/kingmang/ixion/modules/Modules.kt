@@ -10,9 +10,9 @@ object Modules {
     val modules: MutableMap<String?, Class<*>?> = HashMap()
 
     init {
-        modules["std"]  = Prelude::class.java
-        modules["gui"]      = Prelude::class.java
-        modules["http"]     = HttpModule::class.java
+        modules["std"] = Prelude::class.java
+        modules["http"] = HttpModule::class.java
+        modules["async"] = AsyncModule::class.java
     }
 
     @JvmStatic

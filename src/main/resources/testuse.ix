@@ -1,5 +1,5 @@
-use <prelude>
+use <std>
 
 pub def greet(name : string) {
-    println("Hello " + name)
+    std::println("Hello " + name)
 }

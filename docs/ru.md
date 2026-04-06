@@ -12,6 +12,8 @@
 * [Структуры](#Структуры)
 * [Перечисления](#Перечисления)
 * [HTTP модуль](#HTTP-модуль)
+* [GUI модуль (Swing)](#GUI-модуль-swing)
+* [Async модуль](#Async-модуль)
 
 
 # Первая программа
@@ -223,3 +225,35 @@ def main() {
 - `request(method: string, url: string, body: string): string`
 - `requestStatus(method: string, url: string, body: string): int`
 - `urlEncode(value: string): string`
+
+
+# Async
+
+Для фоновых задач.
+
+````scala
+use <std>
+use <async>
+
+pub def main() {
+    var taskId = async::run(lambda (): void {
+        async::sleep(300)
+        std::println("Background task finished")
+    })
+
+    while (async::isRunning(taskId)) {
+        std::println("Waiting...")
+        async::sleep(100)
+    }
+
+    std::println("Done")
+}
+````
+
+Доступные функции:
+- `run(task): int`
+- `runDelayed(delayMs: int, task): int`
+- `isRunning(taskId: int): bool`
+- `await(taskId: int): void`
+- `cancel(taskId: int): bool`
+- `sleep(ms: int): void`

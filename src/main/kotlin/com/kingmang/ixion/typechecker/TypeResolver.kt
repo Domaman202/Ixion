@@ -76,7 +76,14 @@ object TypeResolver {
             par is ExternalType && arg is LambdaType      -> par.typeClass!!.isAssignableFrom(arg.functionalInterface)
             par is LambdaType   && arg is ExternalType    -> arg.typeClass!!.isAssignableFrom(par.functionalInterface)
             // external
-            par is ExternalType && arg is ExternalType    -> par.name == arg.name
+            par is ExternalType && arg is ExternalType    -> {
+                val parClass = par.typeClass
+                val argClass = arg.typeClass
+                when {
+                    parClass == null || argClass == null -> par.name == arg.name
+                    else -> parClass.isAssignableFrom(argClass)
+                }
+            }
             // other
             isList(arg)     && par is ExternalType -> par.typeClass == IxListWrapper::class.java
             isList(par)     && arg is ExternalType -> arg.typeClass == IxListWrapper::class.java
