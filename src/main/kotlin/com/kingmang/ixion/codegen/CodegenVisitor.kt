@@ -523,7 +523,7 @@ class CodegenVisitor(val api: IxApi, val rootContext: Context?, val source: IxFi
      * @return Пустой Optional
      */
     override fun visitFunctionStmt(statement: DefStatement): Optional<ClassWriter> {
-        val funcType = currentContext!!.getVariableTyped<DefType?>(statement.name.source, DefType::class.java as Class<DefType?>)
+        val funcType = currentContext!!.getVariableTyped<DefType>(statement.name.source)
         functionStack.add(funcType)
         val childEnvironment = statement.body!!.context
         var name = "_" + funcType!!.name
@@ -669,7 +669,7 @@ class CodegenVisitor(val api: IxApi, val rootContext: Context?, val source: IxFi
     override fun visitLiteralExpr(expression: LiteralExpression): Optional<ClassWriter> {
         if (expression.realType is BuiltInType) {
             val transformed =
-                TypeResolver.getValueFromString(expression.literal.source!!, getFromToken(expression.literal.type)!!)
+                TypeResolver.getValueFromString(expression.literal.source, getFromToken(expression.literal.type)!!)
             val ga = functionStack.peek().ga
             when (expression.realType) {
                 BuiltInType.INT -> ga!!.push(transformed as Int)
@@ -845,18 +845,18 @@ class CodegenVisitor(val api: IxApi, val rootContext: Context?, val source: IxFi
 
     /**
      * Генерирует байт-код для префиксных операций. В настоящее время поддерживает только унарный минус для числовых типов.
-     * @param expr Префиксное выражение
+     * @param expression Префиксное выражение
      * @return Пустой Optional
      */
-    override fun visitPrefix(expr: PrefixExpression): Optional<ClassWriter> {
+    override fun visitPrefix(expression: PrefixExpression): Optional<ClassWriter> {
         val ga = functionStack.peek().ga
 
-        expr.right.accept(this)
+        expression.right.accept(this)
 
-        val t = expr.right.realType
-        if (expr.operator.type == TokenType.SUB && t is BuiltInType) {
+        val t = expression.right.realType
+        if (expression.operator.type == TokenType.SUB && t is BuiltInType) {
             ga!!.visitInsn(t.negOpcode)
-            expr.realType = t
+            expression.realType = t
         }
 
         return Optional.empty()
@@ -1011,7 +1011,7 @@ class CodegenVisitor(val api: IxApi, val rootContext: Context?, val source: IxFi
      */
     override fun visitStruct(statement: StructStatement): Optional<ClassWriter> {
         val innerCw = ClassWriter(FLAGS)
-        val structType = currentContext!!.getVariableTyped<StructType?>(statement.name.source, StructType::class.java as Class<StructType?>)
+        val structType = currentContext!!.getVariableTyped<StructType>(statement.name.source)
 
         val name = structType!!.name
         val innerName = source.fullRelativePath + "$" + name

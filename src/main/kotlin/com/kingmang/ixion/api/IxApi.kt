@@ -59,8 +59,9 @@ data class IxApi(
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {
-                    if (stmt.stmt is PublicAccess) {
-                        val identifier: String? = (stmt.stmt as PublicAccess).identifier()
+                    val stmt = stmt.stmt;
+                    if (stmt is PublicAccess) {
+                        val identifier = stmt.identifier()
                         val type = source.rootContext.getVariable(identifier)
                         if (type != null) {
                             source.exports[identifier] = type
@@ -175,8 +176,9 @@ data class IxApi(
 
             for (stmt in source.statements) {
                 if (stmt is ExportStatement) {
-                    if (stmt.stmt is PublicAccess) {
-                        val identifier: String? = (stmt.stmt as PublicAccess).identifier()
+                    val stmt = stmt.stmt;
+                    if (stmt is PublicAccess) {
+                        val identifier = stmt.identifier()
                         val type = source.rootContext.getVariable(identifier)
                         if (type != null) {
                             source.exports[identifier] = type

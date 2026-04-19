@@ -322,7 +322,7 @@ class TypeCheckVisitor(private val ixApi: IxApi, private val rootContext: Contex
      * @return Empty optional as function definitions don't produce values
      */
     override fun visitFunctionStmt(statement: DefStatement): Optional<IxType> {
-        val funcType = currentContext.getVariableTyped<DefType?>(statement.name.source, DefType::class.java as Class<DefType?>)
+        val funcType = currentContext.getVariableTyped<DefType>(statement.name.source)
         if (funcType != null) {
             functionStack.add(funcType)
             val childEnvironment = statement.body!!.context
@@ -683,7 +683,7 @@ class TypeCheckVisitor(private val ixApi: IxApi, private val rootContext: Contex
      * @return Empty optional as struct definitions don't produce values
      */
     override fun visitStruct(statement: StructStatement): Optional<IxType> {
-        val structType = currentContext.getVariableTyped<StructType?>(statement.name.source, StructType::class.java as Class<StructType?>)
+        val structType = currentContext.getVariableTyped<StructType>(statement.name.source)
         if (structType != null) {
             val parametersAfter = ArrayList<Pair<kotlin.String, IxType>>()
             zip(
@@ -728,7 +728,7 @@ class TypeCheckVisitor(private val ixApi: IxApi, private val rootContext: Contex
                 ptr = ptr.get().next
             }
             type = Objects.requireNonNullElse(
-                currentContext.getVariableTyped<StructType?>(path.toString(), StructType::class.java as Class<StructType?>),
+                currentContext.getVariableTyped<StructType>(path.toString()),
                 UnknownType(path.toString())
             )
         }

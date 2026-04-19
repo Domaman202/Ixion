@@ -27,7 +27,7 @@ class LexerImpl(file: File) : Lexer {
         val currentChar = peek()
 
         if (currentChar == '\u0000') {
-            return Token(TokenType.EOF, startLine, startCol, null)
+            return Token(TokenType.EOF, startLine, startCol, "")
         }
 
         if (isAlpha(currentChar)) {
