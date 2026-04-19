@@ -28,23 +28,15 @@ import java.util.stream.Collectors
 /**
  * Visitor for building the symbol table and type environment during compilation
  * Traverses the AST and registers variables, functions, types in appropriate scopes
+ *
+ *
+ * @param ixApi The API instance for error reporting and system interactions
+ * @param rootContext The root context/scope for the compilation unit
+ * @param source The source file being processed
  */
-class SemanticVisitor(ixApi: IxApi?, val rootContext: Context?, val source: IxFile) : Visitor<Optional<IxType>> {
-    val ixApi: IxApi?
-    val file: File
-    var currentContext: Context?
-
-    /**
-     * Constructs a new EnvironmentVisitor
-     * @param ixApi The API instance for error reporting and system interactions
-     * @param rootContext The root context/scope for the compilation unit
-     * @param source The source file being processed
-     */
-    init {
-        this.file = source.file
-        this.currentContext = this.rootContext
-        this.ixApi = ixApi
-    }
+class SemanticVisitor(val ixApi: IxApi, val rootContext: Context?, val source: IxFile) : Visitor<Optional<IxType>> {
+    val file: File = source.file
+    var currentContext: Context? = rootContext
 
     /**
      * Generic visit method that delegates to specific AST node handlers

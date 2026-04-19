@@ -131,17 +131,17 @@ data class IxApi(
             }
 
             for (p in allByteUnits.second.entries) {
-                val st = p.key
-                val innerCw = p.value
+                val type = p.key
+                val writer = p.value
 
-                val innerName = source.fullRelativePath + "$" + st.name
+                val innerName = source.fullRelativePath + "$" + type.name
 
                 fileName = Path.of(source.projectRoot, IxionConstant.OUT_DIR, "$innerName.class").toString()
                 tmp = File(fileName)
                 tmp.getParentFile().mkdirs()
                 try {
                     output = FileOutputStream(fileName)
-                    output.write(innerCw.toByteArray())
+                    output.write(writer.toByteArray())
                     output.close()
                 } catch (_: IOException) {
                     exit("The above call to mkdirs() should have worked.", 9)

@@ -23,22 +23,17 @@ import com.kingmang.ixion.runtime.DefType.Companion.getSpecializedType
 import com.kingmang.ixion.typechecker.TypeResolver
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.lang3.NotImplementedException
-import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.Handle
-import org.objectweb.asm.Label
-import org.objectweb.asm.Opcodes
-import org.objectweb.asm.Type
+import org.objectweb.asm.*
 import org.objectweb.asm.commons.GeneratorAdapter
 import org.objectweb.asm.commons.Method
 import java.io.File
 import java.util.*
 import java.util.function.BiConsumer
-import java.util.stream.Collectors
 
-class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxFile, cw: ClassWriter) : Visitor<Optional<ClassWriter>> {
-    val file: File
-    val cw: ClassWriter
-    val structWriters: MutableMap<StructType, ClassWriter> = HashMap()
+class CodegenVisitor(val api: IxApi, val rootContext: Context?, val source: IxFile, cw: ClassWriter) : Visitor<Optional<ClassWriter>> {
+    private val file: File
+    private val cw: ClassWriter
+    private val structWriters: MutableMap<StructType, ClassWriter> = HashMap()
     private val functionStack = Stack<DefType>()
     private var lambdaCounter = 0
 
@@ -48,6 +43,10 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
         this.currentContext = this.rootContext
         this.cw = cw
         this.file = source.file
+    }
+
+    fun getStructWriters(): Map<StructType, ClassWriter> {
+        return this.structWriters
     }
 
     override fun visit(statement: Statement): Optional<ClassWriter> {
@@ -1058,7 +1057,7 @@ class CodegenVisitor(val api: IxApi?, val rootContext: Context?, val source: IxF
 
         BytecodeGenerator.addToString(innerCw, structType, constructorDescriptor.toString(), ownerInternalName)
 
-        structWriters[structType] = innerCw
+        this.structWriters[structType] = innerCw
 
         return Optional.of(innerCw)
     }

@@ -11,7 +11,7 @@ import com.kingmang.ixion.runtime.*
 import java.util.*
 import kotlin.math.max
 
-class JavaCodegenVisitor(private val ixApi: IxApi?, private val source: IxFile) : Visitor<Optional<String>> {
+class JavaCodegenVisitor(private val ixApi: IxApi, private val source: IxFile) : Visitor<Optional<String>> {
     private var currentContext: Context?
     private val output = StringBuilder()
     private var indentLevel = 0
