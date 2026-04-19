@@ -669,7 +669,6 @@ class JavaCodegenVisitor(private val ixApi: IxApi, private val source: IxFile) :
         }
     }
 
-!!
     companion object {
         private fun getEscapedChar(expr: LiteralExpression): String {
             return when (val charValue: Char = expr.literal.source.first()) {
